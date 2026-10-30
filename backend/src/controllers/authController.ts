@@ -2,6 +2,10 @@ import type { RequestHandler } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
+  clearFailedLogins,
+  recordFailedLogin,
+} from "../middleware/rateLimit.js";
+import {
   changePassword,
   getCurrentUser,
   loginUser,
@@ -23,7 +27,22 @@ export const register: RequestHandler = asyncHandler(
 );
 
 export const login: RequestHandler = asyncHandler(async (request, response) => {
-  const result = await loginUser(request.body.email, request.body.password);
+  const email = String(request.body.email);
+  let result;
+  try {
+    result = await loginUser(email, request.body.password);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "INVALID_CREDENTIALS") {
+      const limited = await recordFailedLogin(
+        email,
+        request.ip || "unknown",
+        response,
+      );
+      if (limited) return;
+    }
+    throw error;
+  }
+  await clearFailedLogins(email, request.ip || "unknown");
   response.json({ success: true, data: result });
 });
 

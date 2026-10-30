@@ -9,6 +9,12 @@ import {
   reset,
 } from "../controllers/authController.js";
 import { requireAuth } from "../middleware/auth.js";
+import {
+  forgotPasswordEmailLimit,
+  forgotPasswordIpLimit,
+  loginAttemptLimit,
+  registerRateLimit,
+} from "../middleware/rateLimit.js";
 import { validateBody } from "../middleware/validate.js";
 import {
   changePasswordSchema,
@@ -19,13 +25,20 @@ import {
 } from "../services/authSchemas.js";
 
 export const authRouter = Router();
-authRouter.post("/register", validateBody(registerSchema), register);
-authRouter.post("/login", validateBody(loginSchema), login);
+authRouter.post(
+  "/register",
+  registerRateLimit,
+  validateBody(registerSchema),
+  register,
+);
+authRouter.post("/login", validateBody(loginSchema), loginAttemptLimit, login);
 authRouter.get("/me", requireAuth, me);
 authRouter.post("/logout", requireAuth, logout);
 authRouter.post(
   "/forgot-password",
   validateBody(forgotPasswordSchema),
+  forgotPasswordIpLimit,
+  forgotPasswordEmailLimit,
   forgotPassword,
 );
 authRouter.post("/reset-password", validateBody(resetPasswordSchema), reset);
