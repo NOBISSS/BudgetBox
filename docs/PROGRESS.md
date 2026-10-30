@@ -1,7 +1,7 @@
 # Project progress
 
 - [x] Phase 0 — Audit and monorepo restructure
-- [ ] Phase 1 — Backend scaffold
+- [x] Phase 1 — Backend scaffold
 - [ ] Phase 2 — Data models
 - [ ] Phase 3 — Authentication
 - [ ] Phase 4 — Redis rate limiting
