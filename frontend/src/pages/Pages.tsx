@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -468,37 +468,35 @@ function AuthFrame({
     </div>
   );
 }
-function Field({
-  label,
-  error,
-  type = "text",
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & {
-  label: string;
-  error?: string;
-}) {
+const Field = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    error?: string;
+  }
+>(function Field({ label, error, type = "text", ...props }, ref) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input type={type} {...props} />
+      <input ref={ref} type={type} {...props} />
       {error && <small className="field-error">{error}</small>}
     </label>
   );
-}
-function PasswordField({
-  label,
-  error,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & {
-  label: string;
-  error?: string;
-}) {
+});
+
+const PasswordField = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    error?: string;
+  }
+>(function PasswordField({ label, error, ...props }, ref) {
   const [show, setShow] = useState(false);
   return (
     <label className="field">
       <span>{label}</span>
       <div className="password-field">
-        <input type={show ? "text" : "password"} {...props} />
+        <input ref={ref} type={show ? "text" : "password"} {...props} />
         <button
           type="button"
           aria-label={show ? "Hide password" : "Show password"}
@@ -510,7 +508,7 @@ function PasswordField({
       {error && <small className="field-error">{error}</small>}
     </label>
   );
-}
+});
 type LoginForm = { email: string; password: string };
 export function LoginPage() {
   const dispatch = useAppDispatch();
