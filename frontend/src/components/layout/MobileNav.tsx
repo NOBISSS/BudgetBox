@@ -1,1 +1,3 @@
-export function MobileNav() { return null; }
+export function MobileNav() {
+  return null;
+}

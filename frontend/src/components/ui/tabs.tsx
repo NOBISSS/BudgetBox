@@ -1,1 +1,1 @@
-export { Tabs } from './primitives';
+export { Tabs } from "./primitives";

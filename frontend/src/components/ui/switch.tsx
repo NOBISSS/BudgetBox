@@ -1,1 +1,1 @@
-export { Switch } from './primitives';
+export { Switch } from "./primitives";

@@ -1,1 +1,1 @@
-export { SyncPage as default, SyncPage } from './Pages';
+export { SyncPage as default, SyncPage } from "./Pages";

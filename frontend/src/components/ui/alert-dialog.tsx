@@ -1,1 +1,1 @@
-export { AlertDialog } from './primitives';
+export { AlertDialog } from "./primitives";

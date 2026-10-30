@@ -1,1 +1,1 @@
-export { InsightsPage as default, InsightsPage } from './Pages';
+export { InsightsPage as default, InsightsPage } from "./Pages";
