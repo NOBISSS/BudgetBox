@@ -1,6 +1,6 @@
 # Project progress
 
-- [ ] Phase 0 — Audit and monorepo restructure (blocked: tracked frontend move failed twice; see `docs/BLOCKERS.md`)
+- [x] Phase 0 — Audit and monorepo restructure
 - [ ] Phase 1 — Backend scaffold
 - [ ] Phase 2 — Data models
 - [ ] Phase 3 — Authentication

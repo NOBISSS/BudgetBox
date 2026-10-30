@@ -1,7 +1,7 @@
 # Blockers
 
-## Phase 0 — moving the frontend
+## Phase 0 — moving the frontend (resolved)
 
-`git mv src frontend/src` failed twice with `fatal: renaming 'src' failed: Permission denied`. The second attempt used the explicitly approved Git write escalation and failed the same way. The directory is present and its ACL shows Modify access for the execution identity, but Git still cannot rename it. Per the project instructions, work stopped here rather than attempting an alternate move strategy.
+`git mv src frontend/src` failed twice with `fatal: renaming 'src' failed: Permission denied`. On the resumed request, moving one tracked file with `git mv` succeeded, so all tracked frontend files were moved individually with `git mv` into `frontend/`.
 
-The frontend audit and root housekeeping are recorded on `chore/monorepo-setup`. The frontend has not been moved, `npm install`/`npm run build` under `/frontend` have not been run, and Phase 0 remains incomplete. Phases 1–8 have not started.
+`npm install` and `npm run build` both passed under `/frontend`. Phase 0 is complete. Phases 1–8 have not started yet.
