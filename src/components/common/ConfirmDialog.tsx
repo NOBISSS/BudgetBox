@@ -1,0 +1,2 @@
+import { AlertDialog } from '@/components/ui/primitives';
+export function ConfirmDialog({ open, title, description, onCancel, onConfirm, destructive = true }: { open: boolean; title: string; description: string; onCancel: () => void; onConfirm: () => void; destructive?: boolean }) { return <AlertDialog open={open} title={title} description={description} onCancel={onCancel} onConfirm={onConfirm} confirmText={destructive ? 'Delete' : 'Continue'}/>; }

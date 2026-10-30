@@ -1,0 +1,2 @@
+import type { ReactNode } from 'react';
+export function StatCard({ label, value, detail, icon, tone = 'navy' }: { label: string; value: string; detail: string; icon: ReactNode; tone?: string }) { return <article className="stat-card"><div className="stat-top"><span className={`stat-icon ${tone}`}>{icon}</span><span className="eyebrow">{label}</span></div><strong>{value}</strong><small>{detail}</small></article>; }
