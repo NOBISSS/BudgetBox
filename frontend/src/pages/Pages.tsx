@@ -58,7 +58,11 @@ import {
   resetPassword as resetPasswordRequest,
   updateCachedUser,
 } from "@/features/auth/authService";
-import { loginSchema, registerSchema } from "@/features/auth/schemas";
+import {
+  loginSchema,
+  passwordSchema,
+  registerSchema,
+} from "@/features/auth/schemas";
 import {
   setActiveBudget,
   persistBudget,
@@ -754,7 +758,7 @@ export function ForgotPasswordPage() {
           <ArrowRight size={16} />
         </button>
         <div className="inline-alert info">
-          <CircleHelp size={16} /> The link is valid for 30 minutes.
+          <CircleHelp size={16} /> The link is valid for 15 minutes.
         </div>
       </form>
     </AuthFrame>
@@ -768,6 +772,14 @@ export function ResetPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const passwordValidation = passwordSchema.safeParse(password);
+    if (!passwordValidation.success) {
+      toast.error(
+        passwordValidation.error.issues[0]?.message ??
+          "Choose a stronger password.",
+      );
+      return;
+    }
     if (password !== confirmation) {
       toast.error("Passwords do not match.");
       return;
@@ -797,12 +809,14 @@ export function ResetPasswordPage() {
         <PasswordField
           label="New password"
           placeholder="At least 8 characters"
+          required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
         <PasswordField
           label="Confirm new password"
           placeholder="Enter it again"
+          required
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
         />
@@ -1128,7 +1142,7 @@ export function DashboardPage() {
                   <span>
                     <Heart size={16} />
                   </span>
-                  <p>
+                  <p className="text-black">
                     Everything looks balanced this month. Keep doing what works.
                   </p>
                 </div>
@@ -2064,6 +2078,14 @@ export function ChangePasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const passwordValidation = passwordSchema.safeParse(newPassword);
+    if (!passwordValidation.success) {
+      toast.error(
+        passwordValidation.error.issues[0]?.message ??
+          "Choose a stronger password.",
+      );
+      return;
+    }
     if (newPassword !== confirmation) {
       toast.error("Passwords do not match.");
       return;
@@ -2095,18 +2117,21 @@ export function ChangePasswordPage() {
           <PasswordField
             label="Current password"
             placeholder="Enter current password"
+            required
             value={currentPassword}
             onChange={(event) => setCurrentPassword(event.target.value)}
           />
           <PasswordField
             label="New password"
             placeholder="At least 8 characters"
+            required
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
           />
           <PasswordField
             label="Confirm new password"
             placeholder="Enter it again"
+            required
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
           />

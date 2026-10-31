@@ -1,12 +1,12 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import nodemailer from "nodemailer";
 import { env } from "../config/env.js";
 import { redis } from "../config/redis.js";
 import { UserModel } from "../models/User.js";
 import { ApiError } from "../utils/ApiError.js";
 import { logger } from "../utils/logger.js";
+import { sendPasswordResetEmail, sendWelcomeEmail } from "./emailService.js";
 
 const dummyHash = bcrypt.hash("BudgetBoxDummyPassword!1", env.BCRYPT_COST);
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -56,6 +56,7 @@ export async function registerUser(
       email: normalizedEmail,
       passwordHash,
     });
+    await sendWelcomeEmail({ name: user.name, email: user.email });
     return { user: publicUser(user), token: createToken(String(user._id)) };
   } catch (error) {
     if (
@@ -103,40 +104,20 @@ export async function getCurrentUser(userId: string) {
   return publicUser(user);
 }
 
-async function sendResetEmail(email: string, token: string): Promise<void> {
-  const link = `${env.FRONTEND_URL}/reset-password/${token}`;
-  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
-    const transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_PORT === 465,
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: env.SMTP_FROM,
-      to: email,
-      subject: "Reset your BudgetBox password",
-      text: `Use this link within 15 minutes to reset your password: ${link}`,
-    });
-    return;
-  }
-  if (env.NODE_ENV !== "production")
-    logger.info(
-      { email, link },
-      "Password reset link (SMTP is not configured)",
-    );
-}
-
 export async function requestPasswordReset(email: string): Promise<void> {
-  const user = await UserModel.findOne({ email: email.toLowerCase().trim() });
-  if (!user) return;
-  const token = randomBytes(32).toString("hex");
-  const hash = createHash("sha256").update(token).digest("hex");
-  await redis.set(`pwreset:${hash}`, String(user._id), "EX", 900);
   try {
-    await sendResetEmail(user.email, token);
+    const user = await UserModel.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return;
+
+    const token = randomBytes(32).toString("hex");
+    const hash = createHash("sha256").update(token).digest("hex");
+    const key = `pwreset:${hash}`;
+    await redis.set(key, String(user._id), "EX", 900);
+    const delivered = await sendPasswordResetEmail(user.email, token);
+    if (!delivered) await redis.del(key);
   } catch (error) {
-    logger.error({ error }, "Password reset email delivery failed");
+    // Keep the forgot-password response identical during database, Redis, or SMTP failures.
+    logger.error({ error }, "Password reset request could not be completed");
   }
 }
 
@@ -147,7 +128,8 @@ export async function resetPassword(
   assertPassword(newPassword);
   const hash = createHash("sha256").update(token).digest("hex");
   const key = `pwreset:${hash}`;
-  const userId = await redis.get(key);
+  // GETDEL makes the reset token single-use even if two requests race.
+  const userId = await redis.getdel(key);
   if (!userId)
     throw new ApiError(
       400,
@@ -165,7 +147,6 @@ export async function resetPassword(
       "INVALID_RESET_TOKEN",
       "This password reset link is invalid or expired",
     );
-  await redis.del(key);
 }
 
 export async function changePassword(

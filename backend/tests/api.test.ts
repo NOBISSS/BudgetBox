@@ -70,6 +70,7 @@ beforeEach(async () => {
   await mongoose.connection.dropDatabase();
   await redis.flushall();
   mailer.sendMail.mockReset();
+  mailer.sendMail.mockResolvedValue({ messageId: "test-email-id" });
 });
 
 afterAll(async () => {
@@ -81,6 +82,14 @@ afterAll(async () => {
 describe("authentication", () => {
   it("registers, logs in, and rejects a blacklisted logout token", async () => {
     const user = await register("auth@example.com");
+    expect(mailer.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "auth@example.com",
+        subject: "Welcome to BudgetBox",
+        text: expect.stringContaining("Welcome to BudgetBox"),
+        html: expect.stringContaining("Welcome to BudgetBox"),
+      }),
+    );
     const login = await request(app)
       .post("/api/auth/login")
       .send({ email: "auth@example.com", password });
@@ -105,7 +114,10 @@ describe("authentication", () => {
       .send({ email: "reset@example.com" });
     expect(forgot.status).toBe(200);
     expect(forgot.body.data.message).toContain("If an account exists");
-    const text = String(mailer.sendMail.mock.calls[0]?.[0]?.text);
+    const resetMessage = mailer.sendMail.mock.calls.find(
+      ([message]) => message.subject === "Reset your BudgetBox password",
+    )?.[0];
+    const text = String(resetMessage?.text);
     const token = text.match(/reset-password\/([a-f0-9]{64})/)?.[1];
     expect(token).toBeDefined();
     const first = await request(app)
