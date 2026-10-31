@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
+import { z } from "zod";
 import { env } from "../config/env.js";
 import { redis } from "../config/redis.js";
 import { UserModel } from "../models/User.js";
@@ -10,6 +11,13 @@ import { sendPasswordResetEmail, sendWelcomeEmail } from "./emailService.js";
 
 const dummyHash = bcrypt.hash("BudgetBoxDummyPassword!1", env.BCRYPT_COST);
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+const googleTokenSchema = z.object({ access_token: z.string().min(1) });
+const googleProfileSchema = z.object({
+  sub: z.string().min(1),
+  email: z.string().email(),
+  email_verified: z.boolean(),
+  name: z.string().trim().min(1).max(100).optional(),
+});
 const publicUser = (user: { _id: unknown; name: string; email: string }) => ({
   id: String(user._id),
   name: user.name,
@@ -86,6 +94,121 @@ export async function loginUser(email: string, password: string) {
   return { user: publicUser(user), token: createToken(String(user._id)) };
 }
 
+export async function loginWithGoogle(code: string, redirectUri: string) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    throw new ApiError(
+      503,
+      "GOOGLE_AUTH_UNAVAILABLE",
+      "Google sign-in is not configured",
+    );
+  }
+
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!tokenResponse.ok) {
+    logger.warn(
+      { status: tokenResponse.status },
+      "Google authorization code exchange was rejected",
+    );
+    throw new ApiError(
+      401,
+      "GOOGLE_AUTH_FAILED",
+      "Google sign-in could not be verified",
+    );
+  }
+  const token = googleTokenSchema.safeParse(await tokenResponse.json());
+  if (!token.success) {
+    throw new ApiError(
+      401,
+      "GOOGLE_AUTH_FAILED",
+      "Google sign-in could not be verified",
+    );
+  }
+
+  const profileResponse = await fetch(
+    "https://openidconnect.googleapis.com/v1/userinfo",
+    {
+      headers: { Authorization: `Bearer ${token.data.access_token}` },
+      signal: AbortSignal.timeout(8_000),
+    },
+  );
+  if (!profileResponse.ok) {
+    throw new ApiError(
+      401,
+      "GOOGLE_AUTH_FAILED",
+      "Google sign-in could not be verified",
+    );
+  }
+  const profile = googleProfileSchema.safeParse(await profileResponse.json());
+  if (!profile.success || !profile.data.email_verified) {
+    throw new ApiError(
+      401,
+      "GOOGLE_EMAIL_UNVERIFIED",
+      "Google must verify your email address before sign-in",
+    );
+  }
+
+  const email = profile.data.email.toLowerCase().trim();
+  let user = await UserModel.findOne({ googleId: profile.data.sub }).select(
+    "+googleId",
+  );
+  let created = false;
+  if (!user) {
+    user = await UserModel.findOne({ email }).select("+googleId");
+    if (user) {
+      if (user.googleId && user.googleId !== profile.data.sub) {
+        throw new ApiError(
+          409,
+          "GOOGLE_ACCOUNT_ALREADY_LINKED",
+          "This email is linked to a different Google account",
+        );
+      }
+      user.googleId = profile.data.sub;
+      await user.save();
+    } else {
+      try {
+        user = await UserModel.create({
+          name: profile.data.name ?? "BudgetBox user",
+          email,
+          googleId: profile.data.sub,
+        });
+        created = true;
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) throw error;
+        user = await UserModel.findOne({
+          $or: [{ googleId: profile.data.sub }, { email }],
+        }).select("+googleId");
+        if (!user) throw error;
+        if (!user.googleId) {
+          user.googleId = profile.data.sub;
+          await user.save();
+        }
+      }
+    }
+  }
+  if (created) await sendWelcomeEmail({ name: user.name, email: user.email });
+  return { user: publicUser(user), token: createToken(String(user._id)) };
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === 11000
+  );
+}
+
 export async function logoutUser(
   jti: string,
   expiresAt: number,
@@ -156,7 +279,11 @@ export async function changePassword(
 ): Promise<void> {
   assertPassword(newPassword);
   const user = await UserModel.findById(userId).select("+passwordHash");
-  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+  if (
+    !user ||
+    !user.passwordHash ||
+    !(await bcrypt.compare(currentPassword, user.passwordHash))
+  ) {
     throw new ApiError(
       400,
       "INVALID_CURRENT_PASSWORD",

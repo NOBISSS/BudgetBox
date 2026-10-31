@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -73,6 +74,10 @@ beforeEach(async () => {
   mailer.sendMail.mockResolvedValue({ messageId: "test-email-id" });
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 afterAll(async () => {
   await mongoose.disconnect();
   await redis.quit();
@@ -80,6 +85,84 @@ afterAll(async () => {
 });
 
 describe("authentication", () => {
+  it("exchanges a Google authorization code and creates a verified account", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "google-access-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            sub: "google-subject-1",
+            email: "google@example.com",
+            email_verified: true,
+            name: "Google User",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await request(app)
+      .post("/api/auth/google")
+      .send({ code: "one-time-google-auth-code", redirectUri: "postmessage" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.user.email).toBe("google@example.com");
+    expect(response.body.data.token).toEqual(expect.any(String));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mailer.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "google@example.com",
+        subject: "Welcome to BudgetBox",
+      }),
+    );
+  });
+
+  it("rejects Google profiles without a verified email", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ access_token: "google-access-token" }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              sub: "google-subject-2",
+              email: "unverified@example.com",
+              email_verified: false,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        ),
+    );
+
+    const response = await request(app)
+      .post("/api/auth/google")
+      .send({ code: "one-time-google-auth-code", redirectUri: "postmessage" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("GOOGLE_EMAIL_UNVERIFIED");
+  });
+
   it("registers, logs in, and rejects a blacklisted logout token", async () => {
     const user = await register("auth@example.com");
     expect(mailer.sendMail).toHaveBeenCalledWith(

@@ -8,6 +8,7 @@ import {
 import {
   changePassword,
   getCurrentUser,
+  loginWithGoogle,
   loginUser,
   logoutUser,
   registerUser,
@@ -45,6 +46,16 @@ export const login: RequestHandler = asyncHandler(async (request, response) => {
   await clearFailedLogins(email, request.ip || "unknown");
   response.json({ success: true, data: result });
 });
+
+export const google: RequestHandler = asyncHandler(
+  async (request, response) => {
+    const result = await loginWithGoogle(
+      request.body.code,
+      request.body.redirectUri,
+    );
+    response.json({ success: true, data: result });
+  },
+);
 
 export const me: RequestHandler = asyncHandler(async (request, response) => {
   if (!request.user)

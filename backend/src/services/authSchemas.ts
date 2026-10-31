@@ -18,6 +18,10 @@ export const loginSchema = z.object({
   email,
   password: z.string().min(1).max(128),
 });
+export const googleAuthSchema = z.object({
+  code: z.string().min(10).max(4096),
+  redirectUri: z.literal("postmessage"),
+});
 export const forgotPasswordSchema = z.object({ email });
 export const resetPasswordSchema = z.object({
   token: z.string().length(64),

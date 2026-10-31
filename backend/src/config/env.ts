@@ -22,6 +22,8 @@ const envSchema = z
     SMTP_USER: z.string().optional().default(""),
     SMTP_PASS: z.string().optional().default(""),
     SMTP_FROM: z.string().default("BudgetBox <no-reply@budgetbox.app>"),
+    GOOGLE_CLIENT_ID: z.string().optional().default(""),
+    GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
     DEMO_EMAIL: z.string().email().default("demo@budgetbox.app"),
     DEMO_PASSWORD: z.string().min(8).default("Demo@12345"),
   })
@@ -38,6 +40,18 @@ const envSchema = z
         path: ["SMTP_HOST"],
         message:
           "SMTP_HOST, SMTP_USER, and SMTP_PASS must all be configured together",
+      });
+    }
+    const googleCredentials = [
+      values.GOOGLE_CLIENT_ID,
+      values.GOOGLE_CLIENT_SECRET,
+    ];
+    if (googleCredentials.some(Boolean) && !googleCredentials.every(Boolean)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["GOOGLE_CLIENT_SECRET"],
+        message:
+          "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together",
       });
     }
   });

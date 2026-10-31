@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   change,
   forgotPassword,
+  google,
   login,
   logout,
   me,
@@ -19,6 +20,7 @@ import { validateBody } from "../middleware/validate.js";
 import {
   changePasswordSchema,
   forgotPasswordSchema,
+  googleAuthSchema,
   loginSchema,
   registerSchema,
   resetPasswordSchema,
@@ -30,6 +32,12 @@ authRouter.post(
   registerRateLimit,
   validateBody(registerSchema),
   register,
+);
+authRouter.post(
+  "/google",
+  registerRateLimit,
+  validateBody(googleAuthSchema),
+  google,
 );
 authRouter.post("/login", validateBody(loginSchema), loginAttemptLimit, login);
 authRouter.get("/me", requireAuth, me);

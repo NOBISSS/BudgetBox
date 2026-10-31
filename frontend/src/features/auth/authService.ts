@@ -39,6 +39,14 @@ export async function register(
   return persistSession(response.data.data);
 }
 
+export async function loginWithGoogleCode(code: string): Promise<User> {
+  const response = await api.post<ApiEnvelope<AuthResult>>("/auth/google", {
+    code,
+    redirectUri: "postmessage",
+  });
+  return persistSession(response.data.data);
+}
+
 export async function verifyCurrentUser(): Promise<User> {
   const response = await api.get<ApiEnvelope<{ user: User }>>("/auth/me");
   await cacheUser(response.data.data.user);

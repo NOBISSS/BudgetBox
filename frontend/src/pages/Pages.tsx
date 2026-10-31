@@ -52,6 +52,7 @@ import {
   changePassword as changePasswordRequest,
   clearLocalSession,
   login,
+  loginWithGoogleCode,
   logout as logoutRequest,
   register,
   requestPasswordReset,
@@ -63,6 +64,11 @@ import {
   passwordSchema,
   registerSchema,
 } from "@/features/auth/schemas";
+import {
+  isGoogleSignInConfigured,
+  loadGoogleIdentity,
+  requestGoogleAuthorizationCode,
+} from "@/services/googleIdentity";
 import {
   setActiveBudget,
   persistBudget,
@@ -518,11 +524,62 @@ export function LoginPage() {
   const dispatch = useAppDispatch();
   const nav = useNavigate();
   const online = useAppSelector((s) => s.ui.isOnline);
+  const googleConfigured = isGoogleSignInConfigured();
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const {
     register: field,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
+  useEffect(() => {
+    if (!googleConfigured) return;
+    let active = true;
+    void loadGoogleIdentity()
+      .then(() => {
+        if (active) setGoogleReady(true);
+      })
+      .catch(() => {
+        if (active) toast.error("Google sign-in could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [googleConfigured]);
+
+  const signInWithGoogle = () => {
+    if (!online) {
+      toast.error("Connect to the internet to sign in with Google.");
+      return;
+    }
+    if (!googleReady) {
+      toast.error("Google sign-in is not ready yet.");
+      return;
+    }
+    setGoogleLoading(true);
+    requestGoogleAuthorizationCode(
+      (code) => {
+        void (async () => {
+          try {
+            const user = await loginWithGoogleCode(code);
+            dispatch(setUser(user));
+            await dispatch(hydrateBudgets(user.id)).unwrap();
+            void dispatch(runSync(user.id));
+            toast.success("Welcome to BudgetBox.");
+            nav("/dashboard");
+          } catch {
+            toast.error("Google sign-in could not be completed.");
+          } finally {
+            setGoogleLoading(false);
+          }
+        })();
+      },
+      (message) => {
+        setGoogleLoading(false);
+        if (message) toast.error(message);
+      },
+    );
+  };
   const submit = handleSubmit(async (data) => {
     if (!online) {
       toast.error("Connect to the internet to sign in.");
@@ -590,7 +647,13 @@ export function LoginPage() {
         <button
           className="button google-button"
           type="button"
-          onClick={() => toast.info("Google sign in will be available soon.")}
+          onClick={signInWithGoogle}
+          disabled={isSubmitting || googleLoading || !googleReady}
+          title={
+            googleConfigured
+              ? "Continue with your Google account"
+              : "Configure VITE_GOOGLE_CLIENT_ID to enable Google sign-in"
+          }
         >
           ◎ <b>Continue with Google</b>
         </button>
