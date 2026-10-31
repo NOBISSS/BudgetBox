@@ -154,7 +154,7 @@ export async function register(
 export async function loginWithGoogleCode(code: string): Promise<User> {
   const response = await api.post<ApiEnvelope<AuthResult>>("/auth/google", {
     code,
-    redirectUri: "postmessage",
+    redirectUri: window.location.origin,
   });
   return persistSession(response.data.data);
 }

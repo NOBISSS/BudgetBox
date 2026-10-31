@@ -12,6 +12,10 @@ import { sendPasswordResetEmail, sendWelcomeEmail } from "./emailService.js";
 const dummyHash = bcrypt.hash("BudgetBoxDummyPassword!1", env.BCRYPT_COST);
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 const googleTokenSchema = z.object({ access_token: z.string().min(1) });
+const googleOAuthErrorSchema = z.object({
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
 const googleProfileSchema = z.object({
   sub: z.string().min(1),
   email: z.string().email(),
@@ -103,6 +107,15 @@ export async function loginWithGoogle(code: string, redirectUri: string) {
     );
   }
 
+  const expectedRedirectUri = new URL(env.FRONTEND_URL).origin;
+  if (redirectUri !== expectedRedirectUri) {
+    throw new ApiError(
+      400,
+      "GOOGLE_REDIRECT_MISMATCH",
+      "Google sign-in origin does not match the configured frontend URL",
+    );
+  }
+
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -116,8 +129,17 @@ export async function loginWithGoogle(code: string, redirectUri: string) {
     signal: AbortSignal.timeout(8_000),
   });
   if (!tokenResponse.ok) {
+    const errorPayload = googleOAuthErrorSchema.safeParse(
+      await tokenResponse.json().catch(() => null),
+    );
     logger.warn(
-      { status: tokenResponse.status },
+      {
+        status: tokenResponse.status,
+        googleError: errorPayload.success ? errorPayload.data.error : undefined,
+        googleErrorDescription: errorPayload.success
+          ? errorPayload.data.error_description
+          : undefined,
+      },
       "Google authorization code exchange was rejected",
     );
     throw new ApiError(

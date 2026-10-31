@@ -20,7 +20,7 @@ export const loginSchema = z.object({
 });
 export const googleAuthSchema = z.object({
   code: z.string().min(10).max(4096),
-  redirectUri: z.literal("postmessage"),
+  redirectUri: z.string().url().max(2048),
 });
 export const forgotPasswordSchema = z.object({ email });
 export const resetPasswordSchema = z.object({

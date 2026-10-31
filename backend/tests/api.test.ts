@@ -110,9 +110,10 @@ describe("authentication", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await request(app)
-      .post("/api/auth/google")
-      .send({ code: "one-time-google-auth-code", redirectUri: "postmessage" });
+    const response = await request(app).post("/api/auth/google").send({
+      code: "one-time-google-auth-code",
+      redirectUri: "http://localhost:5173",
+    });
 
     expect(response.status).toBe(200);
     expect(response.body.data.user.email).toBe("google@example.com");
@@ -155,9 +156,10 @@ describe("authentication", () => {
         ),
     );
 
-    const response = await request(app)
-      .post("/api/auth/google")
-      .send({ code: "one-time-google-auth-code", redirectUri: "postmessage" });
+    const response = await request(app).post("/api/auth/google").send({
+      code: "one-time-google-auth-code",
+      redirectUri: "http://localhost:5173",
+    });
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe("GOOGLE_EMAIL_UNVERIFIED");

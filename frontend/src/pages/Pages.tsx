@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import axios from "axios";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -569,8 +570,13 @@ export function LoginPage() {
             void dispatch(runSync(user.id));
             toast.success("Welcome to BudgetBox.");
             nav("/dashboard");
-          } catch {
-            toast.error("Google sign-in could not be completed.");
+          } catch (error) {
+            const message = axios.isAxiosError<{
+              error?: { message?: string };
+            }>(error)
+              ? error.response?.data.error?.message
+              : undefined;
+            toast.error(message ?? "Google sign-in could not be completed.");
           } finally {
             setGoogleLoading(false);
           }

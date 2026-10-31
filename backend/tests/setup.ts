@@ -9,4 +9,5 @@ process.env.SMTP_USER = "test-user";
 process.env.SMTP_PASS = "test-password";
 process.env.GOOGLE_CLIENT_ID = "google-test-client.apps.googleusercontent.com";
 process.env.GOOGLE_CLIENT_SECRET = "google-test-client-secret";
+process.env.FRONTEND_URL = "http://localhost:5173";
 process.env.MONGOMS_DOWNLOAD_DIR = `${process.cwd()}/.cache/mongodb-binaries`;

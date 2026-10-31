@@ -17,7 +17,8 @@ api.interceptors.response.use(
       if (
         error.response?.status === 401 &&
         !error.config?.url?.includes("/auth/login") &&
-        !error.config?.url?.includes("/auth/register")
+        !error.config?.url?.includes("/auth/register") &&
+        !error.config?.url?.includes("/auth/google")
       )
         store.dispatch(setModal("session-expired"));
       if (error.response?.status === 429) {

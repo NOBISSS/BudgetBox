@@ -58,7 +58,10 @@ describe("Google authorization-code sign-in", () => {
       }),
     );
 
-    const result = await loginWithGoogle("single-use-code", "postmessage");
+    const result = await loginWithGoogle(
+      "single-use-code",
+      "http://localhost:5173",
+    );
 
     expect(result.user).toEqual({
       id: "user-object-id",
@@ -69,7 +72,7 @@ describe("Google authorization-code sign-in", () => {
     const requestBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(requestBody).toBeInstanceOf(URLSearchParams);
     expect((requestBody as URLSearchParams).get("redirect_uri")).toBe(
-      "postmessage",
+      "http://localhost:5173",
     );
     expect((requestBody as URLSearchParams).get("client_secret")).toBe(
       "google-test-client-secret",
@@ -98,7 +101,7 @@ describe("Google authorization-code sign-in", () => {
     );
 
     await expect(
-      loginWithGoogle("single-use-code", "postmessage"),
+      loginWithGoogle("single-use-code", "http://localhost:5173"),
     ).rejects.toMatchObject({
       code: "GOOGLE_EMAIL_UNVERIFIED",
       statusCode: 401,
