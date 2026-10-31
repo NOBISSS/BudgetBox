@@ -10,6 +10,10 @@ export const settingsStore = localforage.createInstance({
   ...options,
   storeName: "settings",
 });
+export const offlineAuthStore = localforage.createInstance({
+  ...options,
+  storeName: "offline_auth",
+});
 type StoreInstance = ReturnType<typeof localforage.createInstance>;
 const budgetStores = new Map<string, StoreInstance>();
 const syncStores = new Map<string, StoreInstance>();

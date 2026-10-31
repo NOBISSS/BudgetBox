@@ -51,6 +51,8 @@ import { setUser } from "@/features/auth/authSlice";
 import {
   changePassword as changePasswordRequest,
   clearLocalSession,
+  rememberOfflineLogin,
+  unlockOfflineUser,
   login,
   loginWithGoogleCode,
   logout as logoutRequest,
@@ -582,7 +584,21 @@ export function LoginPage() {
   };
   const submit = handleSubmit(async (data) => {
     if (!online) {
-      toast.error("Connect to the internet to sign in.");
+      try {
+        const user = await unlockOfflineUser(data.email, data.password);
+        if (!user) {
+          toast.error(
+            "Email or password does not match this device, or sign in online once to enable offline access.",
+          );
+          return;
+        }
+        dispatch(setUser(user));
+        await dispatch(hydrateBudgets(user.id)).unwrap();
+        toast.success("Unlocked your saved budgets on this device.");
+        nav("/dashboard");
+      } catch {
+        toast.error("Could not unlock offline data on this device.");
+      }
       return;
     }
     try {
@@ -612,8 +628,8 @@ export function LoginPage() {
       <form className="auth-form" onSubmit={submit}>
         {!online && (
           <div className="inline-alert amber">
-            <WifiOff size={16} /> You’re offline. Login needs an internet
-            connection.
+            <WifiOff size={16} /> Enter the email and password used on this
+            device to unlock saved budgets. Google-only accounts need internet.
           </div>
         )}
         <Field
@@ -1643,7 +1659,9 @@ export function SyncPage() {
   const records = useAppSelector((s) => s.budget.records);
   const state = useAppSelector((s) => s.sync);
   const user = useAppSelector((s) => s.auth.user);
+  const token = useAppSelector((s) => s.auth.token);
   const dispatch = useAppDispatch();
+  const nav = useNavigate();
   const pending = records.filter((r) => r.syncStatus !== "synced");
   const synced = records.length - pending.length;
   const syncing = state.syncing;
@@ -1653,6 +1671,10 @@ export function SyncPage() {
       return;
     }
     if (!user) return;
+    if (!token) {
+      toast.error("Sign in online to sync. Your local changes are safe.");
+      return;
+    }
     try {
       await dispatch(runSync(user.id)).unwrap();
       toast.success("All caught up.");
@@ -1664,14 +1686,25 @@ export function SyncPage() {
   return (
     <>
       <PageHeading eyebrow="YOUR DATA, YOUR CALL" title="Sync on your terms.">
-        <Button onClick={run} disabled={syncing}>
-          {syncing ? (
-            <RefreshCw className="spin" size={15} />
-          ) : (
-            <CloudUpload size={15} />
-          )}{" "}
-          {syncing ? "Syncing…" : "Sync now"}
-        </Button>
+        {!token ? (
+          <Button
+            onClick={() => {
+              dispatch(setUser(null));
+              nav("/login");
+            }}
+          >
+            <LogOut size={15} /> Sign in online to sync
+          </Button>
+        ) : (
+          <Button onClick={run} disabled={syncing}>
+            {syncing ? (
+              <RefreshCw className="spin" size={15} />
+            ) : (
+              <CloudUpload size={15} />
+            )}{" "}
+            {syncing ? "Syncing…" : "Sync now"}
+          </Button>
+        )}
       </PageHeading>
       <div className="sync-hero">
         <div className="sync-hero-icon">
@@ -2135,6 +2168,7 @@ export function SettingsPage() {
 export function ChangePasswordPage() {
   const dispatch = useAppDispatch();
   const nav = useNavigate();
+  const user = useAppSelector((s) => s.auth.user);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -2156,6 +2190,13 @@ export function ChangePasswordPage() {
     setSubmitting(true);
     try {
       await changePasswordRequest(currentPassword, newPassword);
+      if (user) {
+        try {
+          await rememberOfflineLogin(user, newPassword);
+        } catch {
+          // Keep the password update successful if local storage is unavailable.
+        }
+      }
       toast.success("Password changed successfully.");
       await clearLocalSession();
       dispatch(setUser(null));
