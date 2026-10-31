@@ -1,1 +1,1 @@
-export { Tooltip } from './primitives';
+export { Tooltip } from "./primitives";

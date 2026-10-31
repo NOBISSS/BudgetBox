@@ -1,1 +1,1 @@
-export { setTheme } from '@/features/settings/settingsSlice';
+export { setTheme } from "@/features/settings/settingsSlice";

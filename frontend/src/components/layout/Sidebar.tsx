@@ -1,6 +1,79 @@
-import { LayoutDashboard, Wallet, Clock3, RefreshCw, ChartNoAxesCombined, Settings2, Plus, ChevronLeft } from 'lucide-react';
-import { NavLink, Link } from 'react-router-dom';
-import { Logo } from '@/components/common/Logo';
-import { useAppSelector } from '@/app/hooks';
-const links = [{ to: '/dashboard', label: 'Overview', icon: LayoutDashboard }, { to: '/budget', label: 'Monthly budget', icon: Wallet }, { to: '/history', label: 'History', icon: Clock3 }, { to: '/sync', label: 'Sync center', icon: RefreshCw }, { to: '/insights', label: 'Insights', icon: ChartNoAxesCombined }];
-export function Sidebar() { const user = useAppSelector((s) => s.auth.user); const initials = (user?.name ?? 'P').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(); return <aside className="sidebar"><Link to="/dashboard" className="side-logo"><Logo/></Link><div className="side-section-label">WORKSPACE</div><nav className="side-links">{links.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}><Icon size={18}/>{label}{label === 'Sync center' && <span className="side-dot"/>}</NavLink>)}</nav><div className="side-spacer"/><div className="sidebar-tip"><span className="tip-mark">✳</span><p>Your budget, wherever you are.</p><small>Your data stays yours, even offline.</small></div><NavLink to="/settings" className={({ isActive }) => `side-link settings-link ${isActive ? 'active' : ''}`}><Settings2 size={18}/>Settings</NavLink><div className="sidebar-user"><div className="avatar">{initials}</div><div><strong>{user?.name ?? 'Your account'}</strong><small>Personal workspace</small></div><ChevronLeft size={16}/></div><Link className="new-budget" to="/budget"><Plus size={17}/>Add a month</Link></aside>; }
+import {
+  LayoutDashboard,
+  Wallet,
+  Clock3,
+  RefreshCw,
+  ChartNoAxesCombined,
+  Settings2,
+  Plus,
+  ChevronLeft,
+} from "lucide-react";
+import { NavLink, Link } from "react-router-dom";
+import { Logo } from "@/components/common/Logo";
+import { useAppSelector } from "@/app/hooks";
+const links = [
+  { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/budget", label: "Monthly budget", icon: Wallet },
+  { to: "/history", label: "History", icon: Clock3 },
+  { to: "/sync", label: "Sync center", icon: RefreshCw },
+  { to: "/insights", label: "Insights", icon: ChartNoAxesCombined },
+];
+export function Sidebar() {
+  const user = useAppSelector((s) => s.auth.user);
+  const initials = (user?.name ?? "P")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <aside className="sidebar">
+      <Link to="/dashboard" className="side-logo">
+        <Logo />
+      </Link>
+      <div className="side-section-label">WORKSPACE</div>
+      <nav className="side-links">
+        {links.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `side-link ${isActive ? "active" : ""}`
+            }
+          >
+            <Icon size={18} />
+            {label}
+            {label === "Sync center" && <span className="side-dot" />}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="side-spacer" />
+      <div className="sidebar-tip">
+        <span className="tip-mark">✳</span>
+        <p>Your budget, wherever you are.</p>
+        <small>Your data stays yours, even offline.</small>
+      </div>
+      <NavLink
+        to="/settings"
+        className={({ isActive }) =>
+          `side-link settings-link ${isActive ? "active" : ""}`
+        }
+      >
+        <Settings2 size={18} />
+        Settings
+      </NavLink>
+      <div className="sidebar-user">
+        <div className="avatar">{initials}</div>
+        <div>
+          <strong>{user?.name ?? "Your account"}</strong>
+          <small>Personal workspace</small>
+        </div>
+        <ChevronLeft size={16} />
+      </div>
+      <Link className="new-budget" to="/budget">
+        <Plus size={17} />
+        Add a month
+      </Link>
+    </aside>
+  );
+}

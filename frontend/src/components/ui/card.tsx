@@ -1,1 +1,1 @@
-export { CardPrimitive as Card } from './primitives';
+export { CardPrimitive as Card } from "./primitives";

@@ -1,1 +1,1 @@
-export { Skeleton } from './primitives';
+export { Skeleton } from "./primitives";

@@ -4,6 +4,7 @@ dist/
 build/
 coverage/
 .vite/
+.cache/
 
 # Environment files
 .env

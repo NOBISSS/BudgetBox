@@ -1,1 +1,1 @@
-export type { BudgetRecord } from '@/types';
+export type { BudgetRecord } from "@/types";

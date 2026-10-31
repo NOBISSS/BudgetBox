@@ -1,1 +1,1 @@
-export { Progress } from './primitives';
+export { Progress } from "./primitives";
