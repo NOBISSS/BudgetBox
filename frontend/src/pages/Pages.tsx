@@ -816,8 +816,10 @@ export function ResetPasswordPage() {
 
 export function DashboardPage() {
   const dispatch = useAppDispatch();
-  const records = useAppSelector((s) =>
-    s.budget.records.filter((r) => !r.isDeleted),
+  const allRecords = useAppSelector((s) => s.budget.records);
+  const records = useMemo(
+    () => allRecords.filter((record) => !record.isDeleted),
+    [allRecords],
   );
   const activeId = useAppSelector((s) => s.budget.activeId);
   const code = useAppSelector((s) => s.settings.currency);
@@ -1424,8 +1426,10 @@ export function BudgetPage() {
 }
 
 export function HistoryPage() {
-  const records = useAppSelector((s) =>
-    s.budget.records.filter((r) => !r.isDeleted),
+  const allRecords = useAppSelector((s) => s.budget.records);
+  const records = useMemo(
+    () => allRecords.filter((record) => !record.isDeleted),
+    [allRecords],
   );
   const code = useAppSelector((s) => s.settings.currency);
   const dispatch = useAppDispatch();
@@ -1711,8 +1715,10 @@ export function SyncPage() {
 }
 
 export function InsightsPage() {
-  const records = useAppSelector((s) =>
-    s.budget.records.filter((r) => !r.isDeleted),
+  const allRecords = useAppSelector((s) => s.budget.records);
+  const records = useMemo(
+    () => allRecords.filter((record) => !record.isDeleted),
+    [allRecords],
   );
   const code = useAppSelector((s) => s.settings.currency);
   const [current, setCurrent] = useState(records[0]);
