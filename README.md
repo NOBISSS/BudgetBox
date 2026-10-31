@@ -25,3 +25,7 @@ The backend's default MongoDB and Redis URLs expect local services on ports 2701
 ## Unlock saved budgets offline
 
 After a password account signs in successfully on a device, BudgetBox stores a salted PBKDF2 password verifier and the cached profile in that browser's IndexedDB. If the user logs out and later has no internet, they can enter the same email and password on the login page to unlock that device's saved budgets. This unlock is local only: edits remain on that device until the user reconnects and signs in online to get a server session and sync. Google-only accounts still need internet to authenticate after logout because BudgetBox has no password to verify locally. Clearing local data also removes the offline unlock verifier. Password login or registration must complete online once after this feature is installed to enable offline unlock on that device.
+
+## Deploy the frontend on Vercel
+
+The Vite frontend is configured for Vercel with SPA deep-link rewrites, security headers, an offline app-shell service worker, and build-generated Open Graph metadata, `robots.txt`, and `sitemap.xml`. In Vercel, set the project root directory to `frontend` and configure the production API URL, Google client ID, and `VITE_SITE_URL`. See [the Vercel deployment guide](./frontend/VERCEL_DEPLOYMENT.md) for setup and post-deployment checks. The Express backend must be hosted separately and allow the deployed frontend origin through `FRONTEND_URL` and CORS.

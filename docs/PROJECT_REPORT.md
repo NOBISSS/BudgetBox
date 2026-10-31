@@ -227,7 +227,7 @@ Replace each placeholder with a screenshot captured from the running application
 - Offline edits are device-local until the user reconnects and signs in online to sync.
 - The complete backend integration test suite and multi-device conflict scenario still need a final end-to-end run.
 - The seed command is currently a scaffold and does not yet populate the demo account and sample months.
-- Docker Compose provides MongoDB and Redis for local development; a production Dockerfile and deployment configuration are not included.
+- Docker Compose provides MongoDB and Redis for local development. The frontend now has Vercel deployment configuration, but the backend production Dockerfile/deployment and an actual production deployment are still outstanding.
 - Production deployment still requires hosted MongoDB and Redis, HTTPS, SMTP credentials, a frontend origin, OAuth configuration, and secure environment-variable management.
 
 Possible future improvements include completing the seed script, adding browser-level offline and multi-device tests, deploying the frontend and API to a production environment, and adding optional device-specific authentication for offline unlock of Google-only accounts.
