@@ -8,8 +8,19 @@ import {
 } from "@/features/budget/budgetDb";
 import type { BudgetRecord } from "@/types";
 import { monthName } from "@/utils/formatters";
-import { getLastPulledAt, setLastPulledAt } from "@/services/db";
+import {
+  getLastPulledAt,
+  setLastPulledAt,
+  getRecurringLastPulledAt,
+  setRecurringLastPulledAt,
+} from "@/services/db";
 import { decidePulledRecord } from "@/utils/syncMerge";
+import {
+  getRecurringExpense,
+  listRecurringExpenses,
+  saveRecurringExpense,
+} from "@/services/db";
+import type { RecurringExpense } from "@/types";
 
 interface ApiEnvelope<T> {
   success: true;
@@ -40,8 +51,16 @@ interface SyncResult {
 }
 interface SyncReport {
   records: BudgetRecord[];
+  recurringExpenses: RecurringExpense[];
   deletedIds: string[];
   conflictMonths: string[];
+}
+interface ServerRecurringExpense extends Omit<
+  RecurringExpense,
+  "syncStatus" | "serverUpdatedAt" | "version"
+> {
+  serverUpdatedAt: string;
+  version: number;
 }
 
 const monthKey = (record: Pick<ServerBudget, "year" | "month">) =>
@@ -99,9 +118,87 @@ async function performSync(userId: string): Promise<SyncReport> {
   const pending = local.filter((record) => record.syncStatus !== "synced");
   const report: SyncReport = {
     records: [],
+    recurringExpenses: [],
     deletedIds: [],
     conflictMonths: [],
   };
+
+  const recurring = await listRecurringExpenses(userId);
+  const pendingRecurring = recurring.filter(
+    (record) => record.syncStatus !== "synced",
+  );
+  for (let offset = 0; offset < pendingRecurring.length; offset += 100) {
+    const batch = pendingRecurring.slice(offset, offset + 100);
+    const response = await withRetries(() =>
+      api.post<
+        ApiEnvelope<{
+          results: Array<{
+            clientId: string;
+            outcome:
+              "created" | "updated" | "unchanged" | "conflict_server_wins";
+            record: ServerRecurringExpense;
+          }>;
+        }>
+      >("/budget/recurring/sync", {
+        records: batch.map((record) => ({
+          clientId: record.clientId || record.id,
+          name: record.name,
+          category: record.category,
+          amount: record.amount,
+          frequency: record.frequency,
+          startDate: record.startDate,
+          ...(record.endDate ? { endDate: record.endDate } : {}),
+          ...(record.dueDay ? { dueDay: record.dueDay } : {}),
+          isActive: record.isActive,
+          paidOccurrences: record.paidOccurrences,
+          isDeleted: record.isDeleted,
+          updatedAt: record.updatedAt,
+        })),
+      }),
+    );
+    for (const result of response.data.data.results) {
+      const sent = batch.find((item) => item.id === result.clientId);
+      if (!sent) continue;
+      if (result.outcome === "conflict_server_wins")
+        report.conflictMonths.push(`Recurring payment: ${sent.name}`);
+      const current = await getRecurringExpense(userId, sent.id);
+      if (current?.updatedAt !== sent.updatedAt) continue;
+      await saveRecurringExpense({
+        ...result.record,
+        id: result.clientId,
+        userId,
+        syncStatus: "synced",
+      });
+    }
+  }
+
+  const lastRecurringPull = await getRecurringLastPulledAt(userId);
+  const recurringPullStart = new Date().toISOString();
+  const recurringChanges = await withRetries(() =>
+    api.get<ApiEnvelope<{ records: ServerRecurringExpense[] }>>(
+      "/budget/recurring/changes",
+      { params: { since: lastRecurringPull ?? new Date(0).toISOString() } },
+    ),
+  );
+  for (const server of recurringChanges.data.data.records) {
+    const current = await getRecurringExpense(userId, server.clientId);
+    if (
+      current &&
+      new Date(current.updatedAt).getTime() >=
+        new Date(server.updatedAt).getTime()
+    )
+      continue;
+    if (current?.syncStatus === "pending")
+      report.conflictMonths.push(`Recurring payment: ${current.name}`);
+    await saveRecurringExpense({
+      ...server,
+      id: server.clientId,
+      userId,
+      syncStatus: "synced",
+    });
+  }
+  await setRecurringLastPulledAt(userId, recurringPullStart);
+  report.recurringExpenses = await listRecurringExpenses(userId);
 
   if (pending.length > 0) {
     const requestRecords = pending.map((record) => ({

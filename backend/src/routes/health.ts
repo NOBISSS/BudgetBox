@@ -6,12 +6,18 @@ export const healthRouter = Router();
 healthRouter.get("/", (_request, response) => {
   const mongo = databaseReady();
   const redis = redisReady();
-  response.status(mongo && redis ? 200 : 503).json({
-    success: true,
-    data: {
-      status: mongo && redis ? "ok" : "degraded",
-      mongo: mongo ? "up" : "down",
-      redis: redis ? "up" : "down",
-    },
-  });
+  if (!mongo || !redis) {
+    response.status(503).json({
+      success: false,
+      error: {
+        code: "DEPENDENCY_UNAVAILABLE",
+        message: "One or more service dependencies are unavailable",
+        details: { mongo: mongo ? "up" : "down", redis: redis ? "up" : "down" },
+      },
+    });
+    return;
+  }
+  response
+    .status(200)
+    .json({ success: true, data: { status: "ok", mongo: "up", redis: "up" } });
 });

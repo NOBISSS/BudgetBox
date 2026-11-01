@@ -17,6 +17,29 @@ export interface BudgetRecord {
   serverUpdatedAt?: string;
   version?: number;
 }
+export type ExpenseCategory =
+  "bills" | "food" | "transport" | "subscriptions" | "miscellaneous";
+export type ExpenseFrequency =
+  "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "one-time";
+export interface RecurringExpense {
+  id: string;
+  clientId: string;
+  userId: string;
+  name: string;
+  category: ExpenseCategory;
+  amount: number;
+  frequency: ExpenseFrequency;
+  startDate: string;
+  endDate?: string;
+  dueDay?: number;
+  isActive: boolean;
+  paidOccurrences: string[];
+  isDeleted: boolean;
+  syncStatus: SyncStatus;
+  updatedAt: string;
+  serverUpdatedAt?: string;
+  version?: number;
+}
 export interface User {
   id: string;
   name: string;

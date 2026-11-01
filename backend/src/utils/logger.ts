@@ -5,8 +5,15 @@ export const logger = pino({
   level: env.NODE_ENV === "production" ? "info" : "debug",
   redact: [
     "req.headers.authorization",
+    "req.headers.cookie",
     "password",
     "passwordHash",
+    "*.password",
+    "*.passwordHash",
+    "JWT_SECRET",
+    "GOOGLE_CLIENT_SECRET",
+    "MONGODB_URI",
+    "REDIS_URL",
     "SMTP_PASS",
   ],
 });
