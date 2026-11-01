@@ -122,33 +122,6 @@ async function syncOne(
   userId: string,
   incoming: BudgetSyncRecord,
 ): Promise<{ outcome: SyncOutcome; record: BudgetApiRecord }> {
-  const existingDoc = await BudgetModel.findOne({
-    userId,
-    month: incoming.month,
-    year: incoming.year,
-  });
-  if (existingDoc) {
-    const existing = serialize(existingDoc);
-    const existingTime = existingDoc.clientUpdatedAt.getTime();
-    const incomingTime = incoming.updatedAt.getTime();
-    if (incomingTime < existingTime)
-      return { outcome: "conflict_server_wins", record: existing };
-    if (incomingTime === existingTime) {
-      return {
-        outcome: sameValues(existing, incoming)
-          ? "unchanged"
-          : "conflict_server_wins",
-        record: existing,
-      };
-    }
-  }
-
-  const filter = {
-    userId,
-    month: incoming.month,
-    year: incoming.year,
-    clientUpdatedAt: { $lte: incoming.updatedAt },
-  };
   const fields = {
     income: incoming.income,
     bills: incoming.bills,
@@ -162,57 +135,63 @@ async function syncOne(
     clientRecordId: incoming.clientRecordId,
   };
 
-  try {
+  const incomingTime = incoming.updatedAt.getTime();
+  const identity = { userId, month: incoming.month, year: incoming.year };
+
+  // Use insert-on-missing followed by compare-and-set updates. The revision
+  // timestamp in the update filter prevents overlapping requests from
+  // replacing a newer write with an older one.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const existingDoc = await BudgetModel.findOne(identity);
+    if (!existingDoc) {
+      try {
+        const created = await BudgetModel.create({
+          ...identity,
+          ...fields,
+          version: 1,
+        });
+        await invalidateCache(userId, incoming.year);
+        return { outcome: "created", record: serialize(created) };
+      } catch (error) {
+        if (isDuplicateKey(error)) continue;
+        throw error;
+      }
+    }
+
+    const existing = serialize(existingDoc);
+    const existingTime = existingDoc.clientUpdatedAt.getTime();
+    if (incomingTime < existingTime) {
+      return { outcome: "conflict_server_wins", record: existing };
+    }
+    if (incomingTime === existingTime) {
+      return {
+        outcome: sameValues(existing, incoming)
+          ? "unchanged"
+          : "conflict_server_wins",
+        record: existing,
+      };
+    }
+
     const updated = await BudgetModel.findOneAndUpdate(
-      filter,
-      { $set: fields, $inc: { version: 1 } },
       {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: false,
+        _id: existingDoc._id,
+        userId,
+        clientUpdatedAt: existingDoc.clientUpdatedAt,
       },
+      { $set: fields, $inc: { version: 1 } },
+      { new: true, runValidators: true },
     );
     if (updated) {
       await invalidateCache(userId, incoming.year);
-      return {
-        outcome: existingDoc ? "updated" : "created",
-        record: serialize(updated),
-      };
-    }
-  } catch (error) {
-    if (!isDuplicateKey(error)) throw error;
-
-    // Concurrent first writes can both observe a missing month. If the other
-    // request inserted an older version, retry against that document without
-    // upsert so the greatest clientUpdatedAt still wins deterministically.
-    const current = await BudgetModel.findOneAndUpdate(
-      filter,
-      { $set: fields, $inc: { version: 1 } },
-      {
-        new: true,
-        upsert: false,
-        runValidators: true,
-      },
-    );
-    if (current) {
-      await invalidateCache(userId, incoming.year);
-      return { outcome: "updated", record: serialize(current) };
+      return { outcome: "updated", record: serialize(updated) };
     }
   }
 
-  const authoritative = await fetchByMonth(
-    userId,
-    incoming.month,
-    incoming.year,
+  throw new ApiError(
+    503,
+    "SYNC_RETRY",
+    "The budget changed during sync; retry this record",
   );
-  if (
-    authoritative.clientUpdatedAt === incoming.updatedAt.toISOString() &&
-    sameValues(authoritative, incoming)
-  ) {
-    return { outcome: "unchanged", record: authoritative };
-  }
-  return { outcome: "conflict_server_wins", record: authoritative };
 }
 
 export async function syncBudgets(
