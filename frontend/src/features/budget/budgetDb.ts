@@ -1,4 +1,9 @@
-import { budgetStoreFor, offlineAuthStore, recurringStoreFor, syncStoreFor } from "@/services/db";
+import {
+  budgetStoreFor,
+  offlineAuthStore,
+  recurringStoreFor,
+  syncStoreFor,
+} from "@/services/db";
 import type { BudgetRecord } from "./types";
 
 export const getBudget = (userId: string, id: string) =>

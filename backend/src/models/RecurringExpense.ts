@@ -15,7 +15,10 @@ const recurringExpenseSchema = new Schema(
       required: true,
       min: 0,
       max: 1_000_000_000_000,
-      validate: { validator: Number.isFinite, message: "Amount must be finite" },
+      validate: {
+        validator: Number.isFinite,
+        message: "Amount must be finite",
+      },
     },
     frequency: {
       type: String,
@@ -40,7 +43,12 @@ recurringExpenseSchema.index({ userId: 1, clientId: 1 }, { unique: true });
 // Delta pulls are scoped by user and ordered by server update time.
 recurringExpenseSchema.index({ userId: 1, serverUpdatedAt: 1 });
 
-export type RecurringExpenseDocument = InferSchemaType<typeof recurringExpenseSchema> & {
+export type RecurringExpenseDocument = InferSchemaType<
+  typeof recurringExpenseSchema
+> & {
   _id: Types.ObjectId;
 };
-export const RecurringExpenseModel = model("RecurringExpense", recurringExpenseSchema);
+export const RecurringExpenseModel = model(
+  "RecurringExpense",
+  recurringExpenseSchema,
+);

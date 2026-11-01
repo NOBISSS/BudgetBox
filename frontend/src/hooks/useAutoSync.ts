@@ -14,14 +14,31 @@ export function useAutoSync(): void {
         .length,
   );
   const pendingRecurringCount = useAppSelector(
-    (state) => state.recurring.records.filter((record) => record.syncStatus !== "synced").length,
+    (state) =>
+      state.recurring.records.filter((record) => record.syncStatus !== "synced")
+        .length,
   );
 
   useEffect(() => {
-    if (!online || !user || !token || syncing || pendingCount + pendingRecurringCount === 0) return;
+    if (
+      !online ||
+      !user ||
+      !token ||
+      syncing ||
+      pendingCount + pendingRecurringCount === 0
+    )
+      return;
     const timer = window.setTimeout(() => {
       void dispatch(runSync(user.id));
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [dispatch, online, pendingCount, pendingRecurringCount, syncing, token, user]);
+  }, [
+    dispatch,
+    online,
+    pendingCount,
+    pendingRecurringCount,
+    syncing,
+    token,
+    user,
+  ]);
 }

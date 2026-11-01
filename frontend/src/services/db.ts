@@ -54,15 +54,22 @@ export function recurringStoreFor(userId: string): StoreInstance {
   const key = namespace(userId);
   let instance = recurringStores.get(key);
   if (!instance) {
-    instance = localforage.createInstance({ ...options, storeName: `recurring_${key}` });
+    instance = localforage.createInstance({
+      ...options,
+      storeName: `recurring_${key}`,
+    });
     recurringStores.set(key, instance);
   }
   return instance;
 }
 
-export async function listRecurringExpenses(userId: string): Promise<RecurringExpense[]> {
+export async function listRecurringExpenses(
+  userId: string,
+): Promise<RecurringExpense[]> {
   const records: RecurringExpense[] = [];
-  await recurringStoreFor(userId).iterate<RecurringExpense, void>((record) => records.push(record));
+  await recurringStoreFor(userId).iterate<RecurringExpense, void>((record) =>
+    records.push(record),
+  );
   return records;
 }
 

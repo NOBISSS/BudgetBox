@@ -10,7 +10,10 @@ function monthlyDate(year: number, monthIndex: number, dueDay: number): Date {
 }
 
 export function occurrenceDates(
-  item: Pick<RecurringExpense, "frequency" | "startDate" | "endDate" | "dueDay" | "isActive" | "isDeleted">,
+  item: Pick<
+    RecurringExpense,
+    "frequency" | "startDate" | "endDate" | "dueDay" | "isActive" | "isDeleted"
+  >,
   rangeStart: Date,
   rangeEnd: Date,
 ): string[] {
@@ -22,13 +25,22 @@ export function occurrenceDates(
   if (lower > upper) return [];
   const dates: string[] = [];
   if (item.frequency === "one-time") {
-    if (start >= rangeStart && start <= rangeEnd && start <= end) dates.push(dateKey(start));
+    if (start >= rangeStart && start <= rangeEnd && start <= end)
+      dates.push(dateKey(start));
     return dates;
   }
   if (item.frequency === "daily" || item.frequency === "weekly") {
     const step = item.frequency === "daily" ? 1 : 7;
-    const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
-    const lowerUtc = Date.UTC(lower.getFullYear(), lower.getMonth(), lower.getDate());
+    const startUtc = Date.UTC(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate(),
+    );
+    const lowerUtc = Date.UTC(
+      lower.getFullYear(),
+      lower.getMonth(),
+      lower.getDate(),
+    );
     const elapsed = Math.max(0, Math.ceil((lowerUtc - startUtc) / 86_400_000));
     const offset = Math.ceil(elapsed / step) * step;
     const date = new Date(start);
@@ -39,7 +51,8 @@ export function occurrenceDates(
     }
     return dates;
   }
-  const interval = item.frequency === "quarterly" ? 3 : item.frequency === "yearly" ? 12 : 1;
+  const interval =
+    item.frequency === "quarterly" ? 3 : item.frequency === "yearly" ? 12 : 1;
   const anchor = asDate(item.startDate);
   const dueDay = item.dueDay ?? anchor.getDate();
   const startIndex = anchor.getFullYear() * 12 + anchor.getMonth();
@@ -49,30 +62,56 @@ export function occurrenceDates(
     const index = startIndex + n * interval;
     const date = monthlyDate(Math.floor(index / 12), index % 12, dueDay);
     if (date > upper) break;
-    if (date >= lower && date >= anchor && date <= end) dates.push(dateKey(date));
+    if (date >= lower && date >= anchor && date <= end)
+      dates.push(dateKey(date));
   }
   return dates;
 }
 
-export function recurringDueInMonth(items: RecurringExpense[], year: number, month: number): number {
+export function recurringDueInMonth(
+  items: RecurringExpense[],
+  year: number,
+  month: number,
+): number {
   const first = new Date(year, month - 1, 1);
   const last = new Date(year, month, 0);
   return items.reduce((sum, item) => {
-    const unpaid = occurrenceDates(item, first, last).filter((date) => !item.paidOccurrences.includes(date));
+    const unpaid = occurrenceDates(item, first, last).filter(
+      (date) => !item.paidOccurrences.includes(date),
+    );
     return sum + unpaid.length * item.amount;
   }, 0);
 }
 
-export function paidRecurringInMonth(items: RecurringExpense[], year: number, month: number): number {
+export function paidRecurringInMonth(
+  items: RecurringExpense[],
+  year: number,
+  month: number,
+): number {
   const first = new Date(year, month - 1, 1);
   const last = new Date(year, month, 0);
-  return items.reduce((sum, item) => sum + occurrenceDates(item, first, last)
-    .filter((date) => item.paidOccurrences.includes(date)).length * item.amount, 0);
+  return items.reduce(
+    (sum, item) =>
+      sum +
+      occurrenceDates(item, first, last).filter((date) =>
+        item.paidOccurrences.includes(date),
+      ).length *
+        item.amount,
+    0,
+  );
 }
 
-export function toggleOccurrencePaid(item: RecurringExpense, date: string): RecurringExpense {
+export function toggleOccurrencePaid(
+  item: RecurringExpense,
+  date: string,
+): RecurringExpense {
   const paid = new Set(item.paidOccurrences);
   if (paid.has(date)) paid.delete(date);
   else paid.add(date);
-  return { ...item, paidOccurrences: [...paid].sort(), syncStatus: "pending", updatedAt: new Date().toISOString() };
+  return {
+    ...item,
+    paidOccurrences: [...paid].sort(),
+    syncStatus: "pending",
+    updatedAt: new Date().toISOString(),
+  };
 }

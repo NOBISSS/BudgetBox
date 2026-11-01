@@ -79,11 +79,19 @@ import {
   hydrateBudgets,
   clearBudgetState,
 } from "@/features/budget/budgetSlice";
-import { hydrateRecurring, persistRecurring, clearRecurring } from "@/features/budget/recurringSlice";
+import {
+  hydrateRecurring,
+  persistRecurring,
+  clearRecurring,
+} from "@/features/budget/recurringSlice";
 import { setCurrency } from "@/features/settings/settingsSlice";
 import { runSync } from "@/features/sync/syncSlice";
 import type { BudgetRecord } from "@/types";
-import type { ExpenseCategory, ExpenseFrequency, RecurringExpense } from "@/types";
+import type {
+  ExpenseCategory,
+  ExpenseFrequency,
+  RecurringExpense,
+} from "@/types";
 import { anomalyRules } from "@/utils/anomalyRules";
 import {
   burnRate,
@@ -101,7 +109,11 @@ import { Logo } from "@/components/common/Logo";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { clearBudgets } from "@/features/budget/budgetDb";
-import { occurrenceDates, recurringDueInMonth, toggleOccurrencePaid } from "@/utils/recurrence";
+import {
+  occurrenceDates,
+  recurringDueInMonth,
+  toggleOccurrencePaid,
+} from "@/utils/recurrence";
 
 const monthKey = (year: number, month: number) =>
   `${year}-${String(month).padStart(2, "0")}`;
@@ -927,7 +939,9 @@ export function DashboardPage() {
     () => allRecords.filter((record) => !record.isDeleted),
     [allRecords],
   );
-  const recurring = useAppSelector((s) => s.recurring.records.filter((item) => !item.isDeleted));
+  const recurring = useAppSelector((s) =>
+    s.recurring.records.filter((item) => !item.isDeleted),
+  );
   const activeId = useAppSelector((s) => s.budget.activeId);
   const code = useAppSelector((s) => s.settings.currency);
   const current = records.find((r) => r.id === activeId) ?? records[0];
@@ -946,7 +960,9 @@ export function DashboardPage() {
   const expenses = current ? totalExpense(current) : 0;
   const saved = current ? savings(current) : 0;
   const predicted = current ? monthEndPrediction(current, recurring) : 0;
-  const predictionOverIncome = Boolean(current && current.income > 0 && predicted > current.income);
+  const predictionOverIncome = Boolean(
+    current && current.income > 0 && predicted > current.income,
+  );
   const alerts = current ? anomalyRules(current) : [];
   const data = current
     ? [
@@ -1050,9 +1066,19 @@ export function DashboardPage() {
                 title="Month-end outlook"
                 caption="Unpaid scheduled payments plus your variable spend pace"
                 action={
-                  <span className={`trend-pill ${predictionOverIncome ? "over-budget" : ""}`}>
-                    {predictionOverIncome ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                    {current.income === 0 ? "Add income" : predictionOverIncome ? "Over income" : "Within income"}
+                  <span
+                    className={`trend-pill ${predictionOverIncome ? "over-budget" : ""}`}
+                  >
+                    {predictionOverIncome ? (
+                      <ArrowUpRight size={14} />
+                    ) : (
+                      <ArrowDownRight size={14} />
+                    )}
+                    {current.income === 0
+                      ? "Add income"
+                      : predictionOverIncome
+                        ? "Over income"
+                        : "Within income"}
                   </span>
                 }
               />
@@ -1314,11 +1340,17 @@ export function BudgetPage() {
   const recurring = recurringAll.filter((item) => !item.isDeleted);
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleAmount, setScheduleAmount] = useState("");
-  const [scheduleCategory, setScheduleCategory] = useState<ExpenseCategory>("bills");
-  const [scheduleFrequency, setScheduleFrequency] = useState<ExpenseFrequency>("monthly");
-  const [scheduleStart, setScheduleStart] = useState(new Date().toISOString().slice(0, 10));
+  const [scheduleCategory, setScheduleCategory] =
+    useState<ExpenseCategory>("bills");
+  const [scheduleFrequency, setScheduleFrequency] =
+    useState<ExpenseFrequency>("monthly");
+  const [scheduleStart, setScheduleStart] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
   const [scheduleEnd, setScheduleEnd] = useState("");
-  const [scheduleDueDay, setScheduleDueDay] = useState(String(new Date().getDate()));
+  const [scheduleDueDay, setScheduleDueDay] = useState(
+    String(new Date().getDate()),
+  );
   const existing = records.find((r) => r.id === activeId);
   const [form, setForm] = useState<BudgetRecord>(
     existing ?? {
@@ -1401,25 +1433,51 @@ export function BudgetPage() {
   const schedulesForMonth = recurring;
   const addSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!user || !scheduleName.trim() || !Number.isFinite(Number(scheduleAmount)) || Number(scheduleAmount) <= 0) return;
+    if (
+      !user ||
+      !scheduleName.trim() ||
+      !Number.isFinite(Number(scheduleAmount)) ||
+      Number(scheduleAmount) <= 0
+    )
+      return;
     const id = crypto.randomUUID();
     const record: RecurringExpense = {
-      id, clientId: id, userId: user.id, name: scheduleName.trim(), category: scheduleCategory,
-      amount: Number(scheduleAmount), frequency: scheduleFrequency, startDate: scheduleStart,
+      id,
+      clientId: id,
+      userId: user.id,
+      name: scheduleName.trim(),
+      category: scheduleCategory,
+      amount: Number(scheduleAmount),
+      frequency: scheduleFrequency,
+      startDate: scheduleStart,
       ...(scheduleEnd ? { endDate: scheduleEnd } : {}),
-      ...(scheduleFrequency === "monthly" || scheduleFrequency === "quarterly" || scheduleFrequency === "yearly"
-        ? { dueDay: Number(scheduleDueDay) } : {}),
-      isActive: true, paidOccurrences: [], isDeleted: false, syncStatus: "pending", updatedAt: new Date().toISOString(),
+      ...(scheduleFrequency === "monthly" ||
+      scheduleFrequency === "quarterly" ||
+      scheduleFrequency === "yearly"
+        ? { dueDay: Number(scheduleDueDay) }
+        : {}),
+      isActive: true,
+      paidOccurrences: [],
+      isDeleted: false,
+      syncStatus: "pending",
+      updatedAt: new Date().toISOString(),
     };
     try {
       await dispatch(persistRecurring(record)).unwrap();
-      setScheduleName(""); setScheduleAmount(""); setScheduleEnd("");
+      setScheduleName("");
+      setScheduleAmount("");
+      setScheduleEnd("");
       toast.success("Recurring payment saved on this device.");
-    } catch { toast.error("Could not save the recurring payment locally."); }
+    } catch {
+      toast.error("Could not save the recurring payment locally.");
+    }
   };
   const updateRecurring = async (item: RecurringExpense) => {
-    try { await dispatch(persistRecurring(item)).unwrap(); }
-    catch { toast.error("Could not save this payment locally."); }
+    try {
+      await dispatch(persistRecurring(item)).unwrap();
+    } catch {
+      toast.error("Could not save this payment locally.");
+    }
   };
   return (
     <>
@@ -1523,9 +1581,7 @@ export function BudgetPage() {
                 {form.income ? Math.round((expense / form.income) * 100) : 0}%
                 of income recorded
               </span>
-              <span>
-                {money(form.income - expense, code)} remaining income
-              </span>
+              <span>{money(form.income - expense, code)} remaining income</span>
             </div>
           </Card>
           <Card className="budget-alerts">
@@ -1563,26 +1619,228 @@ export function BudgetPage() {
         </aside>
       </div>
       <Card className="budget-form-card recurring-card">
-        <SectionTitle title="Recurring payments" caption="Schedule rent, utilities, subscriptions, and other expected payments. Unpaid occurrences are included in the month-end outlook." />
-        <form className="budget-fields recurring-form" onSubmit={(event) => void addSchedule(event)}>
-          <label className="budget-field"><span className="budget-field-copy"><b>Name</b><small>What is this payment for?</small></span><input required maxLength={100} value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} placeholder="Internet bill" /></label>
-          <label className="budget-field"><span className="budget-field-copy"><b>Amount</b><small>Cash paid per occurrence</small></span><input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={(event) => setScheduleAmount(event.target.value)} placeholder="800" /></label>
-          <label className="budget-field"><span className="budget-field-copy"><b>Category</b></span><select value={scheduleCategory} onChange={(event) => setScheduleCategory(event.target.value as ExpenseCategory)}><option value="bills">Bills</option><option value="food">Food</option><option value="transport">Transport</option><option value="subscriptions">Subscriptions</option><option value="miscellaneous">Other</option></select></label>
-          <label className="budget-field"><span className="budget-field-copy"><b>Frequency</b></span><select value={scheduleFrequency} onChange={(event) => setScheduleFrequency(event.target.value as ExpenseFrequency)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option><option value="one-time">One time</option></select></label>
-          <label className="budget-field"><span className="budget-field-copy"><b>First due date</b><small>Quarterly/yearly schedules follow this date</small></span><input required type="date" value={scheduleStart} onChange={(event) => { setScheduleStart(event.target.value); setScheduleDueDay(String(new Date(`${event.target.value}T00:00:00`).getDate())); }} /></label>
-          <label className="budget-field"><span className="budget-field-copy"><b>End date (optional)</b><small>Stop scheduling after this date</small></span><input type="date" min={scheduleStart} value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} /></label>
-          {(scheduleFrequency === "monthly" || scheduleFrequency === "quarterly" || scheduleFrequency === "yearly") && <label className="budget-field"><span className="budget-field-copy"><b>Due day</b><small>Short months use their last calendar day</small></span><input type="number" min="1" max="31" value={scheduleDueDay} onChange={(event) => setScheduleDueDay(event.target.value)} /></label>}
-          <button className="button primary" type="submit"><Plus size={15} /> Add payment</button>
+        <SectionTitle
+          title="Recurring payments"
+          caption="Schedule rent, utilities, subscriptions, and other expected payments. Unpaid occurrences are included in the month-end outlook."
+        />
+        <form
+          className="budget-fields recurring-form"
+          onSubmit={(event) => void addSchedule(event)}
+        >
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>Name</b>
+              <small>What is this payment for?</small>
+            </span>
+            <input
+              required
+              maxLength={100}
+              value={scheduleName}
+              onChange={(event) => setScheduleName(event.target.value)}
+              placeholder="Internet bill"
+            />
+          </label>
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>Amount</b>
+              <small>Cash paid per occurrence</small>
+            </span>
+            <input
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={scheduleAmount}
+              onChange={(event) => setScheduleAmount(event.target.value)}
+              placeholder="800"
+            />
+          </label>
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>Category</b>
+            </span>
+            <select
+              value={scheduleCategory}
+              onChange={(event) =>
+                setScheduleCategory(event.target.value as ExpenseCategory)
+              }
+            >
+              <option value="bills">Bills</option>
+              <option value="food">Food</option>
+              <option value="transport">Transport</option>
+              <option value="subscriptions">Subscriptions</option>
+              <option value="miscellaneous">Other</option>
+            </select>
+          </label>
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>Frequency</b>
+            </span>
+            <select
+              value={scheduleFrequency}
+              onChange={(event) =>
+                setScheduleFrequency(event.target.value as ExpenseFrequency)
+              }
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="one-time">One time</option>
+            </select>
+          </label>
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>First due date</b>
+              <small>Quarterly/yearly schedules follow this date</small>
+            </span>
+            <input
+              required
+              type="date"
+              value={scheduleStart}
+              onChange={(event) => {
+                setScheduleStart(event.target.value);
+                setScheduleDueDay(
+                  String(new Date(`${event.target.value}T00:00:00`).getDate()),
+                );
+              }}
+            />
+          </label>
+          <label className="budget-field">
+            <span className="budget-field-copy">
+              <b>End date (optional)</b>
+              <small>Stop scheduling after this date</small>
+            </span>
+            <input
+              type="date"
+              min={scheduleStart}
+              value={scheduleEnd}
+              onChange={(event) => setScheduleEnd(event.target.value)}
+            />
+          </label>
+          {(scheduleFrequency === "monthly" ||
+            scheduleFrequency === "quarterly" ||
+            scheduleFrequency === "yearly") && (
+            <label className="budget-field">
+              <span className="budget-field-copy">
+                <b>Due day</b>
+                <small>Short months use their last calendar day</small>
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={scheduleDueDay}
+                onChange={(event) => setScheduleDueDay(event.target.value)}
+              />
+            </label>
+          )}
+          <button className="button primary" type="submit">
+            <Plus size={15} /> Add payment
+          </button>
         </form>
-        {schedulesForMonth.length ? <div className="recurring-list">{schedulesForMonth.map((item) => {
-          const dates = item.isActive ? occurrenceDates(item, new Date(form.year, form.month - 1, 1), new Date(form.year, form.month, 0)) : [];
-          return <div className="recurring-item" key={item.id}><div><b>{item.name}</b><small>{money(item.amount, code)} · {item.frequency} · {item.category}{!item.isActive ? " · Paused" : ""}</small>{dates.map((date) => <label className="recurring-occurrence" key={date}><input type="checkbox" checked={item.paidOccurrences.includes(date)} onChange={() => {
-            const changed = toggleOccurrencePaid(item, date);
-            const delta = changed.paidOccurrences.includes(date) ? item.amount : -item.amount;
-            setForm((prev) => ({ ...prev, [item.category]: Math.max(0, prev[item.category] + delta), syncStatus: "pending", updatedAt: new Date().toISOString() }));
-            void updateRecurring(changed);
-          }} /><span>{new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} — {item.paidOccurrences.includes(date) ? "Paid" : "Due"}</span></label>)}{!dates.length && <small>{item.isActive ? "No occurrence due in the selected month" : "Paused schedule"}</small>}</div><div className="recurring-actions"><button type="button" className="button quiet" onClick={() => { void updateRecurring({ ...item, isActive: !item.isActive, syncStatus: "pending", updatedAt: new Date().toISOString() }); }}>{item.isActive ? "Pause" : "Resume"}</button><button type="button" className="button quiet" aria-label={`Delete ${item.name}`} onClick={() => { void updateRecurring({ ...item, isDeleted: true, isActive: false, syncStatus: "pending", updatedAt: new Date().toISOString() }); }}>Delete</button></div></div>;
-        })}</div> : <EmptyState title="No scheduled payments this month" body="Add a recurring payment above. It will be stored locally first and synced when you are online." />}
+        {schedulesForMonth.length ? (
+          <div className="recurring-list">
+            {schedulesForMonth.map((item) => {
+              const dates = item.isActive
+                ? occurrenceDates(
+                    item,
+                    new Date(form.year, form.month - 1, 1),
+                    new Date(form.year, form.month, 0),
+                  )
+                : [];
+              return (
+                <div className="recurring-item" key={item.id}>
+                  <div>
+                    <b>{item.name}</b>
+                    <small>
+                      {money(item.amount, code)} · {item.frequency} ·{" "}
+                      {item.category}
+                      {!item.isActive ? " · Paused" : ""}
+                    </small>
+                    {dates.map((date) => (
+                      <label className="recurring-occurrence" key={date}>
+                        <input
+                          type="checkbox"
+                          checked={item.paidOccurrences.includes(date)}
+                          onChange={() => {
+                            const changed = toggleOccurrencePaid(item, date);
+                            const delta = changed.paidOccurrences.includes(date)
+                              ? item.amount
+                              : -item.amount;
+                            setForm((prev) => ({
+                              ...prev,
+                              [item.category]: Math.max(
+                                0,
+                                prev[item.category] + delta,
+                              ),
+                              syncStatus: "pending",
+                              updatedAt: new Date().toISOString(),
+                            }));
+                            void updateRecurring(changed);
+                          }}
+                        />
+                        <span>
+                          {new Date(`${date}T00:00:00`).toLocaleDateString(
+                            "en-IN",
+                            { day: "numeric", month: "short" },
+                          )}{" "}
+                          —{" "}
+                          {item.paidOccurrences.includes(date) ? "Paid" : "Due"}
+                        </span>
+                      </label>
+                    ))}
+                    {!dates.length && (
+                      <small>
+                        {item.isActive
+                          ? "No occurrence due in the selected month"
+                          : "Paused schedule"}
+                      </small>
+                    )}
+                  </div>
+                  <div className="recurring-actions">
+                    <button
+                      type="button"
+                      className="button quiet"
+                      onClick={() => {
+                        void updateRecurring({
+                          ...item,
+                          isActive: !item.isActive,
+                          syncStatus: "pending",
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }}
+                    >
+                      {item.isActive ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button quiet"
+                      aria-label={`Delete ${item.name}`}
+                      onClick={() => {
+                        void updateRecurring({
+                          ...item,
+                          isDeleted: true,
+                          isActive: false,
+                          syncStatus: "pending",
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            title="No scheduled payments this month"
+            body="Add a recurring payment above. It will be stored locally first and synced when you are online."
+          />
+        )}
       </Card>
     </>
   );
@@ -1734,7 +1992,9 @@ export function SyncPage() {
   const dispatch = useAppDispatch();
   const nav = useNavigate();
   const pending = records.filter((r) => r.syncStatus !== "synced");
-  const pendingRecurring = recurring.filter((item) => item.syncStatus !== "synced");
+  const pendingRecurring = recurring.filter(
+    (item) => item.syncStatus !== "synced",
+  );
   const pendingTotal = pending.length + pendingRecurring.length;
   const synced = records.length + recurring.length - pendingTotal;
   const syncing = state.syncing;
@@ -1819,7 +2079,10 @@ export function SyncPage() {
       </div>
       <div className="sync-grid">
         <Card>
-          <SectionTitle title="Your records" caption="Budgets and schedules on this device" />
+          <SectionTitle
+            title="Your records"
+            caption="Budgets and schedules on this device"
+          />
           <div className="sync-records">
             {records.map((r) => (
               <div key={r.id}>
@@ -1844,8 +2107,24 @@ export function SyncPage() {
             ))}
             {recurring.map((item) => (
               <div key={`recurring-${item.id}`}>
-                <span className="record-icon"><RefreshCw size={16} /></span>
-                <span><b>{item.name}{item.isDeleted ? " · deletion pending" : " · recurring payment"}</b><small>Updated {new Date(item.updatedAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</small></span>
+                <span className="record-icon">
+                  <RefreshCw size={16} />
+                </span>
+                <span>
+                  <b>
+                    {item.name}
+                    {item.isDeleted
+                      ? " · deletion pending"
+                      : " · recurring payment"}
+                  </b>
+                  <small>
+                    Updated{" "}
+                    {new Date(item.updatedAt).toLocaleDateString("en-IN", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </small>
+                </span>
                 <SyncBadge status={item.syncStatus} />
               </div>
             ))}
@@ -1894,9 +2173,9 @@ export function SyncPage() {
         <div>
           <b>How we handle two edits</b>
           <p>
-            If a budget or recurring schedule changes in two places, the
-            version with the later update time wins. Pending local edits remain
-            on this device until they sync.
+            If a budget or recurring schedule changes in two places, the version
+            with the later update time wins. Pending local edits remain on this
+            device until they sync.
           </p>
         </div>
       </div>
@@ -1911,13 +2190,18 @@ export function InsightsPage() {
     [allRecords],
   );
   const code = useAppSelector((s) => s.settings.currency);
-  const recurring = useAppSelector((s) => s.recurring.records.filter((item) => !item.isDeleted));
+  const recurring = useAppSelector((s) =>
+    s.recurring.records.filter((item) => !item.isDeleted),
+  );
   const [currentId, setCurrentId] = useState("");
-  const current = records.find((record) => record.id === currentId) ?? records[0];
+  const current =
+    records.find((record) => record.id === currentId) ?? records[0];
   const alerts = current ? anomalyRules(current) : [];
   const allRules = current ? anomalyRules(current) : [];
   const projected = current ? monthEndPrediction(current, recurring) : 0;
-  const scheduledDue = current ? recurringDueInMonth(recurring, current.year, current.month) : 0;
+  const scheduledDue = current
+    ? recurringDueInMonth(recurring, current.year, current.month)
+    : 0;
   return (
     <>
       <PageHeading
@@ -1939,93 +2223,142 @@ export function InsightsPage() {
           <ChevronDown size={14} />
         </label>
       </PageHeading>
-      {!current ? <EmptyState title="No monthly data yet" body="Add a month to start seeing category-aware insights and scheduled payment forecasts." action={<Button kind="secondary" to="/budget">Add a month <ArrowRight size={14} /></Button>} /> : <div className="stats-grid insight-forecast">
-        <StatCard label="SPENDING SO FAR" value={money(totalExpense(current), code)} detail="Amounts recorded for this month" icon={<CreditCard size={18} />} tone="blue" />
-        <StatCard label="UNPAID SCHEDULED PAYMENTS" value={money(scheduledDue, code)} detail="Due occurrences not marked paid" icon={<CalendarDays size={18} />} tone="peach" />
-        <StatCard label="PROJECTED MONTH-END" value={money(projected, code)} detail={current.income > 0 ? `${money(projected - current.income, code)} vs monthly income` : "Add monthly income for context"} icon={<TrendingDown size={18} />} tone={projected > current.income && current.income > 0 ? "peach" : "mint"} />
-      </div>}
-      {current && <>
-      <div className="insights-intro">
-        <div>
-          <span className="eyebrow">YOUR MONTHLY CHECK-IN</span>
-          <h2>
-            {alerts.length
-              ? "A few things to keep an eye on."
-              : "You’re finding a good rhythm."}
-          </h2>
-          <p>
-            {alerts.length
-              ? "These aren’t rules. They’re just a helpful nudge to check in with your plan."
-              : "Your spending looks well balanced. Keep noticing the habits that are working."}
-          </p>
+      {!current ? (
+        <EmptyState
+          title="No monthly data yet"
+          body="Add a month to start seeing category-aware insights and scheduled payment forecasts."
+          action={
+            <Button kind="secondary" to="/budget">
+              Add a month <ArrowRight size={14} />
+            </Button>
+          }
+        />
+      ) : (
+        <div className="stats-grid insight-forecast">
+          <StatCard
+            label="SPENDING SO FAR"
+            value={money(totalExpense(current), code)}
+            detail="Amounts recorded for this month"
+            icon={<CreditCard size={18} />}
+            tone="blue"
+          />
+          <StatCard
+            label="UNPAID SCHEDULED PAYMENTS"
+            value={money(scheduledDue, code)}
+            detail="Due occurrences not marked paid"
+            icon={<CalendarDays size={18} />}
+            tone="peach"
+          />
+          <StatCard
+            label="PROJECTED MONTH-END"
+            value={money(projected, code)}
+            detail={
+              current.income > 0
+                ? `${money(projected - current.income, code)} vs monthly income`
+                : "Add monthly income for context"
+            }
+            icon={<TrendingDown size={18} />}
+            tone={
+              projected > current.income && current.income > 0
+                ? "peach"
+                : "mint"
+            }
+          />
         </div>
-        <span className="insight-stamp">
-          <Sparkles size={22} />
-        </span>
-      </div>
-      {allRules.length ? (
-        <div className="insight-grid">
-          {allRules.map((a, i) => (
-            <Card key={a.id} className={`insight-card ${a.severity}`}>
-              <div className="insight-card-top">
-                <span className="insight-category">
-                  {a.id === "food"
-                    ? "FOOD & GROCERIES"
-                    : a.id === "subs"
-                      ? "SUBSCRIPTIONS"
-                      : a.id === "bills"
-                        ? "MONTHLY BILLS"
-                        : "TOTAL SPENDING"}
-                </span>
-                <span className={`severity-label ${a.severity}`}>
-                  {a.severity === "red" ? "Needs attention" : "Worth a look"}
-                </span>
-              </div>
-              <span className={`insight-big ${a.severity}`}>
-                {a.id === "food"
-                  ? current.income ? `${Math.round((current.food / current.income) * 100)}%` : "—"
-                  : a.id === "subs"
-                    ? current.income ? `${Math.round((current.subscriptions / current.income) * 100)}%` : "—"
-                    : a.id === "bills"
-                      ? current.income ? `${Math.round((current.bills / current.income) * 100)}%` : "—"
-                      : money(totalExpense(current), code)}
+      )}
+      {current && (
+        <>
+          <div className="insights-intro">
+            <div>
+              <span className="eyebrow">YOUR MONTHLY CHECK-IN</span>
+              <h2>
+                {alerts.length
+                  ? "A few things to keep an eye on."
+                  : "You’re finding a good rhythm."}
+              </h2>
+              <p>
+                {alerts.length
+                  ? "These aren’t rules. They’re just a helpful nudge to check in with your plan."
+                  : "Your spending looks well balanced. Keep noticing the habits that are working."}
+              </p>
+            </div>
+            <span className="insight-stamp">
+              <Sparkles size={22} />
+            </span>
+          </div>
+          {allRules.length ? (
+            <div className="insight-grid">
+              {allRules.map((a, i) => (
+                <Card key={a.id} className={`insight-card ${a.severity}`}>
+                  <div className="insight-card-top">
+                    <span className="insight-category">
+                      {a.id === "food"
+                        ? "FOOD & GROCERIES"
+                        : a.id === "subs"
+                          ? "SUBSCRIPTIONS"
+                          : a.id === "bills"
+                            ? "MONTHLY BILLS"
+                            : "TOTAL SPENDING"}
+                    </span>
+                    <span className={`severity-label ${a.severity}`}>
+                      {a.severity === "red"
+                        ? "Needs attention"
+                        : "Worth a look"}
+                    </span>
+                  </div>
+                  <span className={`insight-big ${a.severity}`}>
+                    {a.id === "food"
+                      ? current.income
+                        ? `${Math.round((current.food / current.income) * 100)}%`
+                        : "—"
+                      : a.id === "subs"
+                        ? current.income
+                          ? `${Math.round((current.subscriptions / current.income) * 100)}%`
+                          : "—"
+                        : a.id === "bills"
+                          ? current.income
+                            ? `${Math.round((current.bills / current.income) * 100)}%`
+                            : "—"
+                          : money(totalExpense(current), code)}
+                  </span>
+                  <h3>{a.message}</h3>
+                  <p>{a.suggestion}</p>
+                  <div className="insight-tip">
+                    <Lightbulb size={15} />
+                    <span>
+                      A small adjustment today can make next month feel easier.
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="healthy-state">
+              <span className="healthy-art">
+                <Heart size={25} />
               </span>
-              <h3>{a.message}</h3>
-              <p>{a.suggestion}</p>
-              <div className="insight-tip">
-                <Lightbulb size={15} />
-                <span>
-                  A small adjustment today can make next month feel easier.
-                </span>
+              <div>
+                <span className="eyebrow">A BALANCED MONTH</span>
+                <h2>Healthy spending, steady progress.</h2>
+                <p>
+                  No alerts for this month. Your choices are lining up with the
+                  plan you made.
+                </p>
+                <Button kind="secondary" to="/budget">
+                  Review your budget <ArrowRight size={14} />
+                </Button>
               </div>
             </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="healthy-state">
-          <span className="healthy-art">
-            <Heart size={25} />
-          </span>
-          <div>
-            <span className="eyebrow">A BALANCED MONTH</span>
-            <h2>Healthy spending, steady progress.</h2>
-            <p>
-              No alerts for this month. Your choices are lining up with the plan
-              you made.
-            </p>
-            <Button kind="secondary" to="/budget">
-              Review your budget <ArrowRight size={14} />
-            </Button>
+          )}
+          <div className="insight-disclaimer">
+            <ShieldCheck size={15} /> The projection treats bills and
+            subscriptions as fixed, adds unpaid scheduled occurrences, and
+            extrapolates only food, transport, and other variable spending. It
+            uses the values you entered as spending so far; this is a planning
+            estimate, not financial advice.
           </div>
-        </Card>
+        </>
       )}
-      <div className="insight-disclaimer">
-        <ShieldCheck size={15} /> The projection treats bills and subscriptions
-        as fixed, adds unpaid scheduled occurrences, and extrapolates only food,
-        transport, and other variable spending. It uses the values you entered
-        as spending so far; this is a planning estimate, not financial advice.
-      </div>
-      </>}
     </>
   );
 }
@@ -2043,7 +2376,12 @@ export function SettingsPage() {
     const blob = new Blob(
       [
         JSON.stringify(
-          { exportedAt: new Date().toISOString(), user, budgets: records, recurringExpenses: recurring },
+          {
+            exportedAt: new Date().toISOString(),
+            user,
+            budgets: records,
+            recurringExpenses: recurring,
+          },
           null,
           2,
         ),
@@ -2167,7 +2505,8 @@ export function SettingsPage() {
                 <div>
                   <b>Export a backup</b>
                   <small>
-                    Download your profile, budgets, and recurring payments as a JSON file.
+                    Download your profile, budgets, and recurring payments as a
+                    JSON file.
                   </small>
                 </div>
                 <Button kind="secondary" onClick={exportJson}>
