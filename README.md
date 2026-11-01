@@ -1,43 +1,224 @@
 # BudgetBox
 
-BudgetBox is an offline-first personal budgeting application. The React frontend lives in [`frontend/`](./frontend/) and the Node API is in [`backend/`](./backend/).
+**A personal budgeting app that keeps working offline.**
 
-See [the frontend audit](./docs/FRONTEND_AUDIT.md) and [phase progress](./docs/PROGRESS.md) for the current implementation status.
+[![CI](https://github.com/NOBISSS/BudgetBox/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NOBISSS/BudgetBox/actions/workflows/ci.yml)
 
-## Rate limiting
+BudgetBox helps people record monthly income and expenses, understand their spending, and keep their budgets available when the network is unreliable. The browser saves each edit to IndexedDB first. When the device is online, a separate API syncs pending changes across devices.
 
-The API applies Redis token buckets through `rate-limiter-flexible`. Keys use the `budgetbox:rate:<policy>:` namespace; email and email/IP identity portions are SHA-256 hashes. Policies are 200 requests/minute per IP globally, 10 registrations/hour per IP, 3 password-reset requests/hour per IP and per email, 5 failed logins/15 minutes per email and IP, and 30 sync requests/minute per user. Login attempts are counted only after invalid credentials; the next attempt is blocked. A `RateLimiterMemory` insurance limiter handles requests while Redis is unavailable, with a warning in the server log. Rate-limited responses include `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `retryAfterSeconds`.
+This repository contains a React single-page app, a Node.js API, local development services, tests, and deployment guides. The frontend is deployed separately from the API; MongoDB and Redis are separate services.
 
-## Email and Google sign-in configuration
+## What you can do
 
-Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` in `backend/.env` to send welcome and password-reset emails. In development, if SMTP is left blank, the API logs the welcome email preview and a usable password-reset link to the backend console. In production, SMTP must be configured. Reset links are single-use and expire after 15 minutes; the forgot-password endpoint always returns the same response whether or not the address has an account.
+- Create monthly budgets with income, bills, food, transport, subscriptions, and miscellaneous expenses.
+- Review dashboard totals, savings, history, charts, and rule-based spending insights.
+- Create recurring payments with daily, weekly, monthly, quarterly, yearly, or one-time schedules; mark individual occurrences paid.
+- Keep viewing and editing saved budgets offline, including after reloading the app.
+- Sync budget records and recurring schedules between devices when online.
+- See whether a budget is local, pending sync, or synced. If two devices edit the same month, the later `updatedAt` timestamp wins and the server returns its authoritative record.
+- Register and sign in with email/password or Google, reset and change a password, and sign out.
+- Configure an email provider for welcome and password-reset messages.
 
-For Gmail, `SMTP_HOST` is `smtp.gmail.com` and port `587` uses STARTTLS. Use the full Gmail address for `SMTP_USER`, a Google App Password for `SMTP_PASS` (requires 2-Step Verification), and the same address as `SMTP_FROM` unless you have configured a permitted send-as alias. Do not use the email address itself as `SMTP_HOST` or use your normal Google account password. For port and TLS behavior, see the [Nodemailer SMTP settings](https://nodemailer.com/smtp) and [Google App Password guidance](https://support.google.com/accounts/answer/185833).
+### Offline behavior
 
-For Google sign-in, create a Web application OAuth client. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `backend/.env`; set the same client ID as `VITE_GOOGLE_CLIENT_ID` in `frontend/.env`. Add the frontend origin (for local development, `http://localhost:5173`) to the OAuth client's authorized JavaScript origins. Keep the client secret only in the backend environment; never add it to a `VITE_` variable. Restart both dev servers after changing environment files.
+Budget edits are saved to the current browser's IndexedDB before the interface updates. Existing local budgets and dashboard calculations remain available offline; queued changes sync after connectivity returns. The app shell must have loaded online at least once for offline page loading to work.
 
-The frontend obtains a short-lived authorization code from Google in a popup and sends it to `POST /api/auth/google`. The backend exchanges the code using the client secret, verifies the Google profile and verified email, links or creates the BudgetBox account, and returns the normal BudgetBox session token.
+Password accounts can unlock that device's saved data after signing out by entering the same email and password. This verifies a salted password verifier stored locally; it does **not** create an API session. Reconnect and sign in online to sync. Google-only accounts need internet to authenticate again after logout. Clearing local data removes the local budgets and offline unlock information.
 
-## Start the local services
+Month-end estimates are forecasts, not bank transactions. They treat bills and subscriptions as fixed amounts, add scheduled unpaid occurrences, then project the daily pace of variable spending. The app does not connect to a bank feed or automatically know when a payment happened: record spending and mark recurring occurrences paid to keep the estimate useful.
 
-The backend's default MongoDB and Redis URLs expect local services on ports 27017 and 6379. Start them from the repository root with `docker compose up -d`, then start the backend and frontend in separate terminals. Stop the containers with `docker compose down`; keep the named database volumes so local data persists.
+## How it works
 
-## Unlock saved budgets offline
+```mermaid
+flowchart LR
+  subgraph Browser[Browser]
+    UI[React and TypeScript UI]
+    State[Redux Toolkit]
+    DB[(IndexedDB via localForage)]
+    UI <--> State
+    State <--> DB
+  end
+  UI -->|Online API calls| API[Express and TypeScript API]
+  API --> Mongo[(MongoDB)]
+  API --> Redis[(Redis)]
+  API --> Mail[SMTP provider]
+  UI --> Google[Google Identity Services]
+  API --> Google
+```
 
-After a password account signs in successfully on a device, BudgetBox stores a salted PBKDF2 password verifier and the cached profile in that browser's IndexedDB. If the user logs out and later has no internet, they can enter the same email and password on the login page to unlock that device's saved budgets. This unlock is local only: edits remain on that device until the user reconnects and signs in online to get a server session and sync. Google-only accounts still need internet to authenticate after logout because BudgetBox has no password to verify locally. Clearing local data also removes the offline unlock verifier. Password login or registration must complete online once after this feature is installed to enable offline unlock on that device.
+The browser owns the immediate editing experience. The API authenticates requests, validates data, scopes records to the signed-in user, and synchronizes changes. MongoDB stores user and budget records. Redis supports rate limits, token revocation, password reset, and short-lived response caches. Insights are calculated from local budget data so they remain available offline.
 
-## Deploy the frontend on Vercel
+## Technology
 
-The Vite frontend is configured for Vercel with SPA deep-link rewrites, security headers, an offline app-shell service worker, and build-generated Open Graph metadata, `robots.txt`, and `sitemap.xml`. In Vercel, set the project root directory to `frontend` and configure the production API URL, Google client ID, and `VITE_SITE_URL`. See [the Vercel deployment guide](./frontend/VERCEL_DEPLOYMENT.md) for setup and post-deployment checks. The Express backend must be hosted separately and allow the deployed frontend origin through `FRONTEND_URL` and CORS.
+| Part | Stack |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, React Router, Redux Toolkit, Tailwind CSS |
+| Local persistence | IndexedDB through localForage |
+| Backend | Node.js 20, Express, TypeScript, Zod, Mongoose |
+| Data and cache | MongoDB 7, Redis 7, ioredis |
+| Authentication | JWT, bcrypt, Google authorization-code flow |
+| Email | Nodemailer over SMTP |
+| Tests | Vitest, Supertest, MongoDB Memory Server, Redis mock |
+| Deployment | Vercel frontend, Docker-ready API |
 
-## Deploy the backend
+## Run locally
 
-The backend includes a multi-stage Node 20 Docker image, production environment validation, a dependency-aware `/api/health` check, graceful shutdown, and an idempotent demo seed command. MongoDB and Redis should be provisioned separately and configured through host secrets. See [the backend deployment guide](./backend/DEPLOYMENT.md) for Render/Railway-style container hosting and AWS EC2 setup, including Vercel CORS, TLS, managed data services, health checks, and secrets.
+### Requirements
 
-## Recurring payments and month-end estimates
+- Node.js **20.x** and npm
+- Docker Desktop or Docker Engine with the Compose plugin
+- Git
 
-Monthly category values represent amounts recorded as spent so far. To record a fixed payment, enter it under bills or subscriptions and mark its scheduled occurrence as paid in the monthly budget's **Recurring payments** panel. Schedules support daily, weekly, monthly, quarterly, yearly, and one-time dates. A schedule is saved to the signed-in user's IndexedDB first, then synced through the authenticated recurring sync endpoints; the server keeps the latest `updatedAt` value per schedule. A due day of 29–31 is clamped to the last day of shorter months. Quarterly and yearly schedules use actual cash-flow dates and are included only in months with an occurrence.
+### 1. Get the code and configure local environment files
 
-The dashboard and Insights estimate month-end spending as fixed bills/subscriptions already recorded, plus unpaid scheduled occurrences, plus the daily run rate of food, transport, and other variable spending. Paid recurring occurrences outside bills/subscriptions are removed from the variable run rate so they are not extrapolated a second time. This is an estimate from the monthly amounts the user records, not a transaction ledger; BudgetBox does not currently store individual non-recurring purchases or automatically mark a recurring payment paid based on a bank feed.
+```sh
+git clone https://github.com/NOBISSS/BudgetBox.git
+cd BudgetBox
+```
 
-See [the API notes](./docs/API.md) for the recurring sync request and response formats.
+Create local environment files from the examples. PowerShell:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
+```
+
+macOS/Linux:
+
+```sh
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+The examples point to local MongoDB, Redis, and the local Vite app. Set `VITE_API_URL=http://localhost:5000/api` in `frontend/.env`. Google sign-in is optional; set `VITE_GOOGLE_CLIENT_ID` in the frontend and the matching `GOOGLE_CLIENT_ID` plus `GOOGLE_CLIENT_SECRET` in the backend. Leave both backend Google values empty to disable it. Never put the Google client secret in a `VITE_` variable.
+
+Email is optional for local development. Without SMTP settings, password-reset links and welcome email previews are written to the backend console. To send actual email, configure all SMTP variables in `backend/.env`.
+
+### 2. Start MongoDB and Redis
+
+From the repository root:
+
+```sh
+docker compose up -d
+```
+
+Check service status with `docker compose ps`. MongoDB and Redis data are stored in named volumes and remain after stopping containers. Stop the services with `docker compose down`.
+
+### 3. Install dependencies and start the API
+
+In terminal one:
+
+```sh
+cd backend
+npm ci
+npm run dev
+```
+
+The API listens at `http://localhost:5000`. Check readiness at [`http://localhost:5000/api/health`](http://localhost:5000/api/health); a ready response reports MongoDB and Redis as up.
+
+Optional: create a local demo account and three sample months:
+
+```sh
+npm run seed
+```
+
+The development seed credentials are `demo@budgetbox.app` / `Demo@12345`. The seed does not overwrite an existing account password or existing month records. Use this account only with local development data.
+
+### 4. Start the frontend
+
+In terminal two, from the repository root:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the Vite URL printed in the terminal (normally [`http://localhost:5173`](http://localhost:5173)). Register a user or use the local demo account. The frontend calls the API at `VITE_API_URL`.
+
+## Commands
+
+Run commands from the matching `frontend/` or `backend/` directory.
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the development server (frontend or API) |
+| `npm run build` | Type-check and create a production build |
+| `npm test` | Run the Vitest suite |
+| `npm run lint` *(backend)* | Run the backend TypeScript check |
+| `npm run seed` *(backend)* | Create local demo data |
+| `npm run format` *(backend)* | Format backend TypeScript, tests, and JSON files with Prettier |
+
+Backend integration tests use MongoDB Memory Server and may download a MongoDB binary on the first run. CI runs install, build, and tests for both apps, then builds the backend Docker image. Run the suites with:
+
+```sh
+cd frontend && npm ci && npm run build && npm test
+cd ../backend && npm ci && npm run build && npm test
+```
+
+## API overview
+
+All endpoints use the `/api` prefix. Protected routes require `Authorization: Bearer <token>`. Responses use `{ "success": true, "data": ... }`; errors use `{ "success": false, "error": ... }`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health` | API and dependency readiness |
+| `POST /api/auth/register` | Register with email and password |
+| `POST /api/auth/login` | Sign in with email and password |
+| `POST /api/auth/google` | Exchange a Google authorization code |
+| `GET /api/auth/me` | Get the current account |
+| `POST /api/auth/logout` | Revoke the current token |
+| `POST /api/auth/forgot-password` | Request a password reset email |
+| `POST /api/auth/reset-password` | Set a new password using a reset token |
+| `POST /api/auth/change-password` | Change password for the signed-in account |
+| `POST /api/budget/sync` | Push monthly budget records |
+| `GET /api/budget/latest` | Read the latest non-deleted budget |
+| `GET /api/budget/history?year=2026` | Read budget history |
+| `GET /api/budget/changes?since=<ISO timestamp>` | Pull budget changes and tombstones |
+| `POST /api/budget/recurring/sync` | Push recurring payment schedules |
+| `GET /api/budget/recurring/changes?since=<ISO timestamp>` | Pull recurring schedule changes |
+
+See [API documentation](./docs/API.md) for payloads, examples, and sync details.
+
+## Project layout
+
+```text
+BudgetBox/
+├── frontend/                 # React app, offline storage, UI, and frontend tests
+├── backend/                  # Express API, MongoDB models, services, and tests
+├── docs/
+│   ├── API.md                # API request/response details
+│   ├── FRONTEND_AUDIT.md     # Frontend implementation audit
+│   ├── PROJECT_REPORT.md     # Detailed project/assignment report
+│   └── PROGRESS.md           # Project phase checklist
+├── .github/workflows/ci.yml # Frontend/backend CI and Docker build
+└── docker-compose.yml        # Local MongoDB and Redis
+```
+
+## Deploy
+
+The frontend is a Vite app configured for Vercel, including SPA route rewrites, security headers, offline app-shell support, and generated Open Graph metadata, `robots.txt`, and sitemap. The API can run as a Node 20 service or in the included multi-stage Docker image. MongoDB and Redis are provisioned separately in production.
+
+- [Frontend/Vercel deployment guide](./frontend/VERCEL_DEPLOYMENT.md)
+- [Backend production and EC2 guide](./backend/DEPLOYMENT.md)
+
+Production setup needs HTTPS, managed/reachable MongoDB and Redis, a strong `JWT_SECRET`, the exact deployed site origin in `FRONTEND_URL`, and runtime secrets configured in the hosting provider. SMTP is required in production for welcome and reset email. Google sign-in requires a Google OAuth Web client. Do not commit `.env` files or secrets.
+
+Build the API container from the repository root:
+
+```sh
+docker build -f backend/Dockerfile -t budgetbox-api:latest ./backend
+```
+
+## More project documentation
+
+- [Project report](./docs/PROJECT_REPORT.md)
+- [Frontend audit](./docs/FRONTEND_AUDIT.md)
+- [API details](./docs/API.md)
+- [Phase checklist](./docs/PROGRESS.md)
+- [Frontend deployment](./frontend/VERCEL_DEPLOYMENT.md)
+- [Backend deployment](./backend/DEPLOYMENT.md)
+
+## License
+
+No license file is currently included in this repository. Contact the repository owner before reusing or redistributing the project.
