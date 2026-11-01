@@ -36,3 +36,4 @@ jobs:
         working-directory: backend
       - run: npm test
         working-directory: backend
+      - run: docker build -f backend/Dockerfile -t budgetbox-api:ci ./backend

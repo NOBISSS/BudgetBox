@@ -5,22 +5,68 @@ import { connectRedis, disconnectRedis } from "./config/redis.js";
 import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 
+async function listen(port: number): Promise<ReturnType<typeof createServer>> {
+  const server = createServer(createApp());
+  server.headersTimeout = 15_000;
+  server.requestTimeout = 30_000;
+  server.keepAliveTimeout = 5_000;
+
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, "0.0.0.0");
+  });
+  return server;
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await connectRedis();
-  const server = createServer(createApp());
-  server.listen(env.PORT, () =>
-    logger.info({ port: env.PORT }, "BudgetBox API listening"),
-  );
+  const server = await listen(env.PORT);
+  logger.info({ port: env.PORT }, "BudgetBox API listening");
+
+  let shuttingDown = false;
   const shutdown = (signal: string) => {
-    logger.info({ signal }, "Shutting down");
-    server.close(() => {
-      void Promise.all([disconnectDatabase(), disconnectRedis()]).then(() =>
-        process.exit(0),
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, "Graceful shutdown started");
+    const forceExit = setTimeout(() => {
+      logger.error(
+        { signal },
+        "Graceful shutdown timed out; closing open connections",
+      );
+      server.closeAllConnections();
+      process.exit(1);
+    }, 15_000);
+    forceExit.unref();
+
+    server.close((serverError) => {
+      void Promise.allSettled([disconnectDatabase(), disconnectRedis()]).then(
+        (results) => {
+          const failures = results.filter(
+            (result) => result.status === "rejected",
+          );
+          if (serverError)
+            logger.error({ error: serverError }, "HTTP server close failed");
+          if (failures.length)
+            logger.error({ failures }, "A dependency failed to close cleanly");
+          clearTimeout(forceExit);
+          process.exitCode = serverError || failures.length ? 1 : 0;
+          process.exit();
+        },
       );
     });
-    setTimeout(() => process.exit(1), 10_000).unref();
+    server.closeIdleConnections();
   };
+
   process.once("SIGINT", () => shutdown("SIGINT"));
   process.once("SIGTERM", () => shutdown("SIGTERM"));
 }

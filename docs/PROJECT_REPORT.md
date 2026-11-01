@@ -207,7 +207,7 @@ Google sign-in additionally requires a Google OAuth Web application client. Conf
 
 The repository includes frontend unit tests for calculation helpers, anomaly rules, and sync merge decisions. Backend tests cover API and authentication behavior, including Google code flow, and use Vitest, Supertest, MongoDB Memory Server, and Redis mocks where applicable. A GitHub Actions workflow defines install, build, and test jobs for both applications.
 
-At report preparation, the frontend production build and backend TypeScript build completed successfully. The focused Google authentication test file passed (2 tests). The entire backend test suite has not been confirmed in this report pass; full integration testing should be completed before describing the project as fully validated.
+The frontend production build and backend TypeScript build completed successfully. The frontend test suite passed (11 tests), and the backend test suite passed (13 tests) using the installed MongoDB 6.0 binary through MongoDB Memory Server's `MONGOMS_SYSTEM_BINARY` option. GitHub Actions runs install, build, and test for both applications and builds the backend Docker image. A manual two-device browser conflict walkthrough remains useful before a public launch.
 
 ## 12. Screenshots to Add
 
@@ -234,15 +234,14 @@ Replace each placeholder with a screenshot captured from the running application
 - Google-only users need an internet connection to authenticate after logging out; local password verification is available only to password accounts.
 - Offline edits are device-local until the user reconnects and signs in online to sync.
 - Month-end insights use manually recorded monthly category totals, not a transaction ledger or bank feed; users must enter spending and mark scheduled payments paid for the estimate to stay accurate.
-- The complete backend integration test suite and multi-device conflict scenario still need a final end-to-end run.
-- The seed command is currently a scaffold and does not yet populate the demo account and sample months.
-- Docker Compose provides MongoDB and Redis for local development. The frontend now has Vercel deployment configuration, but the backend production Dockerfile/deployment and an actual production deployment are still outstanding.
+- The project does not include a transaction ledger or bank feed. Month-end insights use manually entered monthly category totals and schedule payment status.
+- Docker Compose provides MongoDB and Redis for local development. The frontend Vercel setup and backend production Docker image/deployment guide are included, but the backend has not yet been deployed to a production host.
 - Production deployment still requires hosted MongoDB and Redis, HTTPS, SMTP credentials, a frontend origin, OAuth configuration, and secure environment-variable management.
 
-Possible future improvements include completing the seed script, adding browser-level offline and multi-device tests, deploying the frontend and API to a production environment, and adding optional device-specific authentication for offline unlock of Google-only accounts.
+Possible future improvements include browser-level offline and multi-device tests, deploying the API to a production environment, and adding optional device-specific authentication for offline unlock of Google-only accounts.
 
 ## 14. Conclusion
 
 BudgetBox combines local-first budgeting with an authenticated backend for account management and cross-device synchronization. Its local persistence lets users keep working when connectivity is unavailable, while the timestamp-based merge process helps reconcile edits after reconnection. The project also includes account recovery, Google authentication, backend input validation, per-user data isolation, rate limiting, and operational logging.
 
-The frontend and backend builds pass, and the focused Google authentication tests pass. Completing the full integration verification and the remaining seed/deployment work would strengthen the project for production use. The architecture provides a practical foundation for a personal budgeting application that remains useful offline while supporting synchronized access across devices.
+The frontend and backend builds and automated tests pass. Production container and environment guidance are provided, while production hosting still requires managed MongoDB and Redis, SMTP, HTTPS, OAuth configuration, and host-level monitoring and backups. The architecture provides a practical foundation for a personal budgeting application that remains useful offline while supporting synchronized access across devices.

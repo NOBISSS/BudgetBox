@@ -30,6 +30,10 @@ After a password account signs in successfully on a device, BudgetBox stores a s
 
 The Vite frontend is configured for Vercel with SPA deep-link rewrites, security headers, an offline app-shell service worker, and build-generated Open Graph metadata, `robots.txt`, and `sitemap.xml`. In Vercel, set the project root directory to `frontend` and configure the production API URL, Google client ID, and `VITE_SITE_URL`. See [the Vercel deployment guide](./frontend/VERCEL_DEPLOYMENT.md) for setup and post-deployment checks. The Express backend must be hosted separately and allow the deployed frontend origin through `FRONTEND_URL` and CORS.
 
+## Deploy the backend
+
+The backend includes a multi-stage Node 20 Docker image, production environment validation, a dependency-aware `/api/health` check, graceful shutdown, and an idempotent demo seed command. MongoDB and Redis should be provisioned separately and configured through host secrets. See [the backend deployment guide](./backend/DEPLOYMENT.md) for Render/Railway-style container hosting and AWS EC2 setup, including Vercel CORS, TLS, managed data services, health checks, and secrets.
+
 ## Recurring payments and month-end estimates
 
 Monthly category values represent amounts recorded as spent so far. To record a fixed payment, enter it under bills or subscriptions and mark its scheduled occurrence as paid in the monthly budget's **Recurring payments** panel. Schedules support daily, weekly, monthly, quarterly, yearly, and one-time dates. A schedule is saved to the signed-in user's IndexedDB first, then synced through the authenticated recurring sync endpoints; the server keeps the latest `updatedAt` value per schedule. A due day of 29–31 is clamped to the last day of shorter months. Quarterly and yearly schedules use actual cash-flow dates and are included only in months with an occurrence.
