@@ -261,6 +261,14 @@ describe("budget sync and cache", () => {
       .send({ records: [newerRecord] });
     expect(retry.body.data.results[0].outcome).toBe("unchanged");
 
+    const timestampTie = await request(app)
+      .post("/api/budget/sync")
+      .set(auth(token))
+      .send({ records: [sample(1, "2025-01-02T00:00:00.000Z", 1800)] });
+    expect(timestampTie.body.data.results[0].outcome).toBe(
+      "conflict_server_wins",
+    );
+
     const concurrent = await Promise.all([
       request(app)
         .post("/api/budget/sync")

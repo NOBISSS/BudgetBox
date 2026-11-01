@@ -133,8 +133,14 @@ async function syncOne(
     const incomingTime = incoming.updatedAt.getTime();
     if (incomingTime < existingTime)
       return { outcome: "conflict_server_wins", record: existing };
-    if (incomingTime === existingTime && sameValues(existing, incoming))
-      return { outcome: "unchanged", record: existing };
+    if (incomingTime === existingTime) {
+      return {
+        outcome: sameValues(existing, incoming)
+          ? "unchanged"
+          : "conflict_server_wins",
+        record: existing,
+      };
+    }
   }
 
   const filter = {
@@ -176,6 +182,23 @@ async function syncOne(
     }
   } catch (error) {
     if (!isDuplicateKey(error)) throw error;
+
+    // Concurrent first writes can both observe a missing month. If the other
+    // request inserted an older version, retry against that document without
+    // upsert so the greatest clientUpdatedAt still wins deterministically.
+    const current = await BudgetModel.findOneAndUpdate(
+      filter,
+      { $set: fields, $inc: { version: 1 } },
+      {
+        new: true,
+        upsert: false,
+        runValidators: true,
+      },
+    );
+    if (current) {
+      await invalidateCache(userId, incoming.year);
+      return { outcome: "updated", record: serialize(current) };
+    }
   }
 
   const authoritative = await fetchByMonth(
