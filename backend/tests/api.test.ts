@@ -305,3 +305,55 @@ describe("budget sync and cache", () => {
     ).toBe("MISS");
   });
 });
+
+describe("recurring expense sync", () => {
+  const recurring = (updatedAt: string, amount = 900) => ({
+    clientId: "internet-plan",
+    name: "Internet",
+    category: "bills",
+    amount,
+    frequency: "quarterly",
+    startDate: "2025-01-31",
+    dueDay: 31,
+    isActive: true,
+    paidOccurrences: ["2025-01-31"],
+    isDeleted: false,
+    updatedAt,
+  });
+
+  it("syncs schedules with last-write-wins and scopes change pulls to the owner", async () => {
+    const userA = await register("recurring-a@example.com");
+    const userB = await register("recurring-b@example.com");
+    const created = await request(app)
+      .post("/api/budget/recurring/sync")
+      .set(auth(userA.token))
+      .send({ records: [recurring("2025-01-01T00:00:00.000Z")] });
+    expect(created.status).toBe(200);
+    expect(created.body.data.results[0].outcome).toBe("created");
+
+    const newer = await request(app)
+      .post("/api/budget/recurring/sync")
+      .set(auth(userA.token))
+      .send({ records: [recurring("2025-01-02T00:00:00.000Z", 1200)] });
+    expect(newer.body.data.results[0].outcome).toBe("updated");
+
+    const stale = await request(app)
+      .post("/api/budget/recurring/sync")
+      .set(auth(userA.token))
+      .send({ records: [recurring("2025-01-01T12:00:00.000Z", 1000)] });
+    expect(stale.body.data.results[0].outcome).toBe("conflict_server_wins");
+
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const ownChanges = await request(app)
+      .get("/api/budget/recurring/changes")
+      .query({ since })
+      .set(auth(userA.token));
+    expect(ownChanges.body.data.records).toHaveLength(1);
+    expect(ownChanges.body.data.records[0].amount).toBe(1200);
+    const otherChanges = await request(app)
+      .get("/api/budget/recurring/changes")
+      .query({ since })
+      .set(auth(userB.token));
+    expect(otherChanges.body.data.records).toHaveLength(0);
+  });
+});

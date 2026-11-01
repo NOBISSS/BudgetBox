@@ -4,8 +4,9 @@ import budget from "@/features/budget/budgetSlice";
 import settings from "@/features/settings/settingsSlice";
 import sync from "@/features/sync/syncSlice";
 import ui from "@/features/ui/uiSlice";
+import recurring from "@/features/budget/recurringSlice";
 export const store = configureStore({
-  reducer: { auth, budget, settings, sync, ui },
+  reducer: { auth, budget, settings, sync, ui, recurring },
 });
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

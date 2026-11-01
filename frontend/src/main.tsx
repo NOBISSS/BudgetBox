@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import App from "./App";
 import { store } from "./app/store";
 import { hydrateBudgets } from "./features/budget/budgetSlice";
+import { hydrateRecurring } from "./features/budget/recurringSlice";
 import { runSync } from "./features/sync/syncSlice";
 import { setUser } from "./features/auth/authSlice";
 import { verifyCurrentUser } from "./features/auth/authService";
@@ -27,6 +28,7 @@ async function initialize(): Promise<void> {
   if (cachedUser) {
     store.dispatch(setUser(cachedUser));
     await store.dispatch(hydrateBudgets(cachedUser.id)).unwrap();
+    await store.dispatch(hydrateRecurring(cachedUser.id)).unwrap();
   } else if (token) {
     localStorage.removeItem("bb_token");
   }

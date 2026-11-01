@@ -29,3 +29,11 @@ After a password account signs in successfully on a device, BudgetBox stores a s
 ## Deploy the frontend on Vercel
 
 The Vite frontend is configured for Vercel with SPA deep-link rewrites, security headers, an offline app-shell service worker, and build-generated Open Graph metadata, `robots.txt`, and `sitemap.xml`. In Vercel, set the project root directory to `frontend` and configure the production API URL, Google client ID, and `VITE_SITE_URL`. See [the Vercel deployment guide](./frontend/VERCEL_DEPLOYMENT.md) for setup and post-deployment checks. The Express backend must be hosted separately and allow the deployed frontend origin through `FRONTEND_URL` and CORS.
+
+## Recurring payments and month-end estimates
+
+Monthly category values represent amounts recorded as spent so far. To record a fixed payment, enter it under bills or subscriptions and mark its scheduled occurrence as paid in the monthly budget's **Recurring payments** panel. Schedules support daily, weekly, monthly, quarterly, yearly, and one-time dates. A schedule is saved to the signed-in user's IndexedDB first, then synced through the authenticated recurring sync endpoints; the server keeps the latest `updatedAt` value per schedule. A due day of 29–31 is clamped to the last day of shorter months. Quarterly and yearly schedules use actual cash-flow dates and are included only in months with an occurrence.
+
+The dashboard and Insights estimate month-end spending as fixed bills/subscriptions already recorded, plus unpaid scheduled occurrences, plus the daily run rate of food, transport, and other variable spending. Paid recurring occurrences outside bills/subscriptions are removed from the variable run rate so they are not extrapolated a second time. This is an estimate from the monthly amounts the user records, not a transaction ledger; BudgetBox does not currently store individual non-recurring purchases or automatically mark a recurring payment paid based on a bank feed.
+
+See [the API notes](./docs/API.md) for the recurring sync request and response formats.

@@ -11,6 +11,8 @@ import {
   budgetChangesQuerySchema,
   budgetHistoryQuerySchema,
 } from "../services/budgetSchemas.js";
+import { getRecurringExpenseChanges, syncRecurringExpenses } from "../services/recurringExpenseService.js";
+import { recurringChangesSchema } from "../services/recurringExpenseSchemas.js";
 
 function authenticatedId(request: Parameters<RequestHandler>[0]): string {
   if (!request.user)
@@ -53,3 +55,14 @@ export const changes: RequestHandler = asyncHandler(
     response.json({ success: true, data: { records } });
   },
 );
+
+export const syncRecurring: RequestHandler = asyncHandler(async (request, response) => {
+  const data = await syncRecurringExpenses(authenticatedId(request), request.body.records);
+  response.json({ success: true, data });
+});
+
+export const recurringChanges: RequestHandler = asyncHandler(async (request, response) => {
+  const query = recurringChangesSchema.parse(request.query);
+  const records = await getRecurringExpenseChanges(authenticatedId(request), query.since);
+  response.json({ success: true, data: { records } });
+});

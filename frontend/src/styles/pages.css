@@ -851,3 +851,16 @@
   color: var(--muted);
   margin: 0 0 20px;
 }
+.recurring-card { margin-top: 18px; }
+.recurring-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; margin-top: 18px; }
+.recurring-form .budget-field { display: grid; gap: 7px; }
+.recurring-form .budget-field input, .recurring-form .budget-field select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--surface); color: var(--ink); }
+.recurring-form > .button { min-height: 40px; justify-self: start; }
+.recurring-list { display: grid; gap: 10px; margin-top: 18px; }
+.recurring-item { display: flex; justify-content: space-between; gap: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.recurring-item > div { display: grid; gap: 6px; }
+.recurring-actions { display: flex; align-items: flex-start; gap: 6px; }
+.recurring-item small { color: var(--muted); }
+.recurring-occurrence { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.recurring-occurrence input { accent-color: var(--accent); }
+@media (max-width: 640px) { .recurring-form { grid-template-columns: 1fr; } }

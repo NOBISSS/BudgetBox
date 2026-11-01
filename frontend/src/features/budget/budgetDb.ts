@@ -1,4 +1,4 @@
-import { budgetStoreFor, offlineAuthStore, syncStoreFor } from "@/services/db";
+import { budgetStoreFor, offlineAuthStore, recurringStoreFor, syncStoreFor } from "@/services/db";
 import type { BudgetRecord } from "./types";
 
 export const getBudget = (userId: string, id: string) =>
@@ -20,6 +20,7 @@ export const deleteBudget = (userId: string, id: string) =>
 export async function clearBudgets(userId: string): Promise<void> {
   await Promise.all([
     budgetStoreFor(userId).clear(),
+    recurringStoreFor(userId).clear(),
     syncStoreFor(userId).clear(),
     offlineAuthStore.removeItem(userId),
   ]);

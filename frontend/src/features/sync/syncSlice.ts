@@ -2,6 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { removeLocalBudget, upsertBudget } from "@/features/budget/budgetSlice";
 import { setModal, setModalPayload } from "@/features/ui/uiSlice";
 import { syncBudgets } from "./syncService";
+import { replaceRecurring } from "@/features/budget/recurringSlice";
 
 interface SyncState {
   syncing: boolean;
@@ -18,6 +19,7 @@ export const runSync = createAsyncThunk(
   "sync/run",
   async (userId: string, { dispatch }) => {
     const report = await syncBudgets(userId);
+    dispatch(replaceRecurring(report.recurringExpenses));
     report.records.forEach((record) => dispatch(upsertBudget(record)));
     report.deletedIds.forEach((id) => dispatch(removeLocalBudget(id)));
     if (report.conflictMonths.length) {

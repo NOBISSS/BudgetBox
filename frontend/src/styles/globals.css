@@ -601,6 +601,7 @@ select:focus-visible {
   font-size: 9px;
   font-weight: 650;
 }
+.trend-pill.over-budget { background: #fff0ec; color: #b74a36; }
 .prediction-main {
   display: flex;
   justify-content: space-between;

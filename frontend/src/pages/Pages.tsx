@@ -79,9 +79,11 @@ import {
   hydrateBudgets,
   clearBudgetState,
 } from "@/features/budget/budgetSlice";
+import { hydrateRecurring, persistRecurring, clearRecurring } from "@/features/budget/recurringSlice";
 import { setCurrency } from "@/features/settings/settingsSlice";
 import { runSync } from "@/features/sync/syncSlice";
 import type { BudgetRecord } from "@/types";
+import type { ExpenseCategory, ExpenseFrequency, RecurringExpense } from "@/types";
 import { anomalyRules } from "@/utils/anomalyRules";
 import {
   burnRate,
@@ -99,6 +101,7 @@ import { Logo } from "@/components/common/Logo";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { clearBudgets } from "@/features/budget/budgetDb";
+import { occurrenceDates, recurringDueInMonth, toggleOccurrencePaid } from "@/utils/recurrence";
 
 const monthKey = (year: number, month: number) =>
   `${year}-${String(month).padStart(2, "0")}`;
@@ -567,6 +570,7 @@ export function LoginPage() {
             const user = await loginWithGoogleCode(code);
             dispatch(setUser(user));
             await dispatch(hydrateBudgets(user.id)).unwrap();
+            await dispatch(hydrateRecurring(user.id)).unwrap();
             void dispatch(runSync(user.id));
             toast.success("Welcome to BudgetBox.");
             nav("/dashboard");
@@ -600,6 +604,7 @@ export function LoginPage() {
         }
         dispatch(setUser(user));
         await dispatch(hydrateBudgets(user.id)).unwrap();
+        await dispatch(hydrateRecurring(user.id)).unwrap();
         toast.success("Unlocked your saved budgets on this device.");
         nav("/dashboard");
       } catch {
@@ -611,6 +616,7 @@ export function LoginPage() {
       const user = await login(data.email, data.password);
       dispatch(setUser(user));
       await dispatch(hydrateBudgets(user.id)).unwrap();
+      await dispatch(hydrateRecurring(user.id)).unwrap();
       void dispatch(runSync(user.id));
       toast.success("Welcome back.");
       nav("/dashboard");
@@ -713,6 +719,7 @@ export function RegisterPage() {
       const user = await register(data.name, data.email, data.password);
       dispatch(setUser(user));
       await dispatch(hydrateBudgets(user.id)).unwrap();
+      await dispatch(hydrateRecurring(user.id)).unwrap();
       void dispatch(runSync(user.id));
       toast.success("Your account is ready.");
       nav("/dashboard");
@@ -920,6 +927,7 @@ export function DashboardPage() {
     () => allRecords.filter((record) => !record.isDeleted),
     [allRecords],
   );
+  const recurring = useAppSelector((s) => s.recurring.records.filter((item) => !item.isDeleted));
   const activeId = useAppSelector((s) => s.budget.activeId);
   const code = useAppSelector((s) => s.settings.currency);
   const current = records.find((r) => r.id === activeId) ?? records[0];
@@ -937,7 +945,8 @@ export function DashboardPage() {
   };
   const expenses = current ? totalExpense(current) : 0;
   const saved = current ? savings(current) : 0;
-  const predicted = current ? monthEndPrediction(current) : 0;
+  const predicted = current ? monthEndPrediction(current, recurring) : 0;
+  const predictionOverIncome = Boolean(current && current.income > 0 && predicted > current.income);
   const alerts = current ? anomalyRules(current) : [];
   const data = current
     ? [
@@ -1010,7 +1019,7 @@ export function DashboardPage() {
               tone="navy"
             />
             <StatCard
-              label="TOTAL SPENT"
+              label="SPENDING SO FAR"
               value={money(expenses, code)}
               detail="Across 5 categories"
               icon={<CreditCard size={18} />}
@@ -1039,10 +1048,11 @@ export function DashboardPage() {
             <Card className="prediction-card">
               <SectionTitle
                 title="Month-end outlook"
-                caption="Based on your spending so far"
+                caption="Unpaid scheduled payments plus your variable spend pace"
                 action={
-                  <span className="trend-pill">
-                    <ArrowDownRight size={14} /> On track
+                  <span className={`trend-pill ${predictionOverIncome ? "over-budget" : ""}`}>
+                    {predictionOverIncome ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    {current.income === 0 ? "Add income" : predictionOverIncome ? "Over income" : "Within income"}
                   </span>
                 }
               />
@@ -1050,7 +1060,7 @@ export function DashboardPage() {
                 <div>
                   <span className="eyebrow">PREDICTED TOTAL SPEND</span>
                   <strong>{money(predicted, code)}</strong>
-                  <small>Budgeted {money(current.income, code)}</small>
+                  <small>Monthly income {money(current.income, code)}</small>
                 </div>
                 <div className="prediction-mark">
                   <TrendingDown size={24} />
@@ -1263,32 +1273,32 @@ const fieldMeta = [
   },
   {
     key: "bills",
-    label: "Monthly bills",
-    help: "Rent, utilities, insurance, and other fixed costs",
+    label: "Bills paid so far",
+    help: "Record fixed payments already paid this month",
     icon: FileText,
   },
   {
     key: "food",
-    label: "Food & groceries",
+    label: "Food spent so far",
     help: "Groceries, dining out, and coffee runs",
     icon: Heart,
   },
   {
     key: "transport",
-    label: "Transport",
+    label: "Transport spent so far",
     help: "Commutes, fuel, rideshares, and travel",
     icon: ArrowRight,
   },
   {
     key: "subscriptions",
-    label: "Subscriptions",
+    label: "Subscriptions paid so far",
     help: "Streaming, apps, memberships, and more",
     icon: RefreshCw,
   },
   {
     key: "miscellaneous",
-    label: "Miscellaneous",
-    help: "Everything else that makes life yours",
+    label: "Other spent so far",
+    help: "Shopping, gifts, repairs, and other spending",
     icon: Sparkles,
   },
 ] as const;
@@ -1300,6 +1310,15 @@ export function BudgetPage() {
   const activeId = useAppSelector((s) => s.budget.activeId);
   const code = useAppSelector((s) => s.settings.currency);
   const user = useAppSelector((s) => s.auth.user);
+  const recurringAll = useAppSelector((s) => s.recurring.records);
+  const recurring = recurringAll.filter((item) => !item.isDeleted);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleAmount, setScheduleAmount] = useState("");
+  const [scheduleCategory, setScheduleCategory] = useState<ExpenseCategory>("bills");
+  const [scheduleFrequency, setScheduleFrequency] = useState<ExpenseFrequency>("monthly");
+  const [scheduleStart, setScheduleStart] = useState(new Date().toISOString().slice(0, 10));
+  const [scheduleEnd, setScheduleEnd] = useState("");
+  const [scheduleDueDay, setScheduleDueDay] = useState(String(new Date().getDate()));
   const existing = records.find((r) => r.id === activeId);
   const [form, setForm] = useState<BudgetRecord>(
     existing ?? {
@@ -1379,6 +1398,29 @@ export function BudgetPage() {
   };
   const expense = totalExpense(form);
   const alerts = anomalyRules(form);
+  const schedulesForMonth = recurring;
+  const addSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || !scheduleName.trim() || !Number.isFinite(Number(scheduleAmount)) || Number(scheduleAmount) <= 0) return;
+    const id = crypto.randomUUID();
+    const record: RecurringExpense = {
+      id, clientId: id, userId: user.id, name: scheduleName.trim(), category: scheduleCategory,
+      amount: Number(scheduleAmount), frequency: scheduleFrequency, startDate: scheduleStart,
+      ...(scheduleEnd ? { endDate: scheduleEnd } : {}),
+      ...(scheduleFrequency === "monthly" || scheduleFrequency === "quarterly" || scheduleFrequency === "yearly"
+        ? { dueDay: Number(scheduleDueDay) } : {}),
+      isActive: true, paidOccurrences: [], isDeleted: false, syncStatus: "pending", updatedAt: new Date().toISOString(),
+    };
+    try {
+      await dispatch(persistRecurring(record)).unwrap();
+      setScheduleName(""); setScheduleAmount(""); setScheduleEnd("");
+      toast.success("Recurring payment saved on this device.");
+    } catch { toast.error("Could not save the recurring payment locally."); }
+  };
+  const updateRecurring = async (item: RecurringExpense) => {
+    try { await dispatch(persistRecurring(item)).unwrap(); }
+    catch { toast.error("Could not save this payment locally."); }
+  };
   return (
     <>
       <PageHeading
@@ -1458,7 +1500,7 @@ export function BudgetPage() {
               <b>{money(form.income, code)}</b>
             </div>
             <div className="summary-row">
-              <span>Planned spending</span>
+              <span>Recorded spending</span>
               <b>{money(expense, code)}</b>
             </div>
             <div className="summary-row savings-row">
@@ -1479,10 +1521,10 @@ export function BudgetPage() {
             <div className="summary-caption">
               <span>
                 {form.income ? Math.round((expense / form.income) * 100) : 0}%
-                allocated
+                of income recorded
               </span>
               <span>
-                {money(Math.max(0, form.income - expense), code)} unplanned
+                {money(form.income - expense, code)} remaining income
               </span>
             </div>
           </Card>
@@ -1520,6 +1562,28 @@ export function BudgetPage() {
           </div>
         </aside>
       </div>
+      <Card className="budget-form-card recurring-card">
+        <SectionTitle title="Recurring payments" caption="Schedule rent, utilities, subscriptions, and other expected payments. Unpaid occurrences are included in the month-end outlook." />
+        <form className="budget-fields recurring-form" onSubmit={(event) => void addSchedule(event)}>
+          <label className="budget-field"><span className="budget-field-copy"><b>Name</b><small>What is this payment for?</small></span><input required maxLength={100} value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} placeholder="Internet bill" /></label>
+          <label className="budget-field"><span className="budget-field-copy"><b>Amount</b><small>Cash paid per occurrence</small></span><input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={(event) => setScheduleAmount(event.target.value)} placeholder="800" /></label>
+          <label className="budget-field"><span className="budget-field-copy"><b>Category</b></span><select value={scheduleCategory} onChange={(event) => setScheduleCategory(event.target.value as ExpenseCategory)}><option value="bills">Bills</option><option value="food">Food</option><option value="transport">Transport</option><option value="subscriptions">Subscriptions</option><option value="miscellaneous">Other</option></select></label>
+          <label className="budget-field"><span className="budget-field-copy"><b>Frequency</b></span><select value={scheduleFrequency} onChange={(event) => setScheduleFrequency(event.target.value as ExpenseFrequency)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option><option value="one-time">One time</option></select></label>
+          <label className="budget-field"><span className="budget-field-copy"><b>First due date</b><small>Quarterly/yearly schedules follow this date</small></span><input required type="date" value={scheduleStart} onChange={(event) => { setScheduleStart(event.target.value); setScheduleDueDay(String(new Date(`${event.target.value}T00:00:00`).getDate())); }} /></label>
+          <label className="budget-field"><span className="budget-field-copy"><b>End date (optional)</b><small>Stop scheduling after this date</small></span><input type="date" min={scheduleStart} value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} /></label>
+          {(scheduleFrequency === "monthly" || scheduleFrequency === "quarterly" || scheduleFrequency === "yearly") && <label className="budget-field"><span className="budget-field-copy"><b>Due day</b><small>Short months use their last calendar day</small></span><input type="number" min="1" max="31" value={scheduleDueDay} onChange={(event) => setScheduleDueDay(event.target.value)} /></label>}
+          <button className="button primary" type="submit"><Plus size={15} /> Add payment</button>
+        </form>
+        {schedulesForMonth.length ? <div className="recurring-list">{schedulesForMonth.map((item) => {
+          const dates = item.isActive ? occurrenceDates(item, new Date(form.year, form.month - 1, 1), new Date(form.year, form.month, 0)) : [];
+          return <div className="recurring-item" key={item.id}><div><b>{item.name}</b><small>{money(item.amount, code)} · {item.frequency} · {item.category}{!item.isActive ? " · Paused" : ""}</small>{dates.map((date) => <label className="recurring-occurrence" key={date}><input type="checkbox" checked={item.paidOccurrences.includes(date)} onChange={() => {
+            const changed = toggleOccurrencePaid(item, date);
+            const delta = changed.paidOccurrences.includes(date) ? item.amount : -item.amount;
+            setForm((prev) => ({ ...prev, [item.category]: Math.max(0, prev[item.category] + delta), syncStatus: "pending", updatedAt: new Date().toISOString() }));
+            void updateRecurring(changed);
+          }} /><span>{new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} — {item.paidOccurrences.includes(date) ? "Paid" : "Due"}</span></label>)}{!dates.length && <small>{item.isActive ? "No occurrence due in the selected month" : "Paused schedule"}</small>}</div><div className="recurring-actions"><button type="button" className="button quiet" onClick={() => { void updateRecurring({ ...item, isActive: !item.isActive, syncStatus: "pending", updatedAt: new Date().toISOString() }); }}>{item.isActive ? "Pause" : "Resume"}</button><button type="button" className="button quiet" aria-label={`Delete ${item.name}`} onClick={() => { void updateRecurring({ ...item, isDeleted: true, isActive: false, syncStatus: "pending", updatedAt: new Date().toISOString() }); }}>Delete</button></div></div>;
+        })}</div> : <EmptyState title="No scheduled payments this month" body="Add a recurring payment above. It will be stored locally first and synced when you are online." />}
+      </Card>
     </>
   );
 }
@@ -1663,13 +1727,16 @@ export function HistoryPage() {
 
 export function SyncPage() {
   const records = useAppSelector((s) => s.budget.records);
+  const recurring = useAppSelector((s) => s.recurring.records);
   const state = useAppSelector((s) => s.sync);
   const user = useAppSelector((s) => s.auth.user);
   const token = useAppSelector((s) => s.auth.token);
   const dispatch = useAppDispatch();
   const nav = useNavigate();
   const pending = records.filter((r) => r.syncStatus !== "synced");
-  const synced = records.length - pending.length;
+  const pendingRecurring = recurring.filter((item) => item.syncStatus !== "synced");
+  const pendingTotal = pending.length + pendingRecurring.length;
+  const synced = records.length + recurring.length - pendingTotal;
   const syncing = state.syncing;
   const run = async () => {
     if (!navigator.onLine) {
@@ -1719,14 +1786,14 @@ export function SyncPage() {
         <div className="sync-hero-copy">
           <span className="eyebrow">SYNC STATUS</span>
           <h2>
-            {pending.length
+            {pendingTotal
               ? "A few changes are waiting."
               : "You’re all caught up."}
           </h2>
           <p>
-            {pending.length
-              ? "Your latest budget edits are safely stored on this device and ready to sync."
-              : "Your budgets are up to date across your devices."}
+            {pendingTotal
+              ? "Your budget and scheduled payment changes are saved on this device and ready to sync."
+              : "Your budgets and schedules are up to date across your devices."}
           </p>
           <div className="sync-last">
             <Check size={14} /> Last synced{" "}
@@ -1737,22 +1804,22 @@ export function SyncPage() {
         </div>
         <div className="sync-counts">
           <div>
-            <b>{records.length}</b>
-            <small>Total months</small>
+            <b>{records.length + recurring.length}</b>
+            <small>Total records</small>
           </div>
           <div>
-            <b className="amber-text">{pending.length}</b>
+            <b className="amber-text">{pendingTotal}</b>
             <small>Pending</small>
           </div>
           <div>
-            <b className="green-text">{synced}</b>
+            <b className="green-text">{Math.max(0, synced)}</b>
             <small>Synced</small>
           </div>
         </div>
       </div>
       <div className="sync-grid">
         <Card>
-          <SectionTitle title="Your records" caption="Budgets on this device" />
+          <SectionTitle title="Your records" caption="Budgets and schedules on this device" />
           <div className="sync-records">
             {records.map((r) => (
               <div key={r.id}>
@@ -1775,24 +1842,31 @@ export function SyncPage() {
                 <SyncBadge status={r.syncStatus} />
               </div>
             ))}
+            {recurring.map((item) => (
+              <div key={`recurring-${item.id}`}>
+                <span className="record-icon"><RefreshCw size={16} /></span>
+                <span><b>{item.name}{item.isDeleted ? " · deletion pending" : " · recurring payment"}</b><small>Updated {new Date(item.updatedAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</small></span>
+                <SyncBadge status={item.syncStatus} />
+              </div>
+            ))}
           </div>
         </Card>
         <Card>
           <SectionTitle title="Sync activity" caption="A little history" />
           <div className="activity-list">
             <div>
-              <i className={pending.length ? "" : "activity-good"}>
-                {pending.length ? <Cloud size={12} /> : <Check size={12} />}
+              <i className={pendingTotal ? "" : "activity-good"}>
+                {pendingTotal ? <Cloud size={12} /> : <Check size={12} />}
               </i>
               <span>
                 <b>
-                  {pending.length
+                  {pendingTotal
                     ? "Changes saved on this device"
                     : "Ready to sync"}
                 </b>
                 <small>
-                  {pending.length
-                    ? `${pending.length} record${pending.length === 1 ? "" : "s"} waiting for a connection`
+                  {pendingTotal
+                    ? `${pendingTotal} record${pendingTotal === 1 ? "" : "s"} waiting for a connection`
                     : "Your current records are up to date"}
                 </small>
               </span>
@@ -1820,9 +1894,9 @@ export function SyncPage() {
         <div>
           <b>How we handle two edits</b>
           <p>
-            If the same budget changes in two places, the most recently updated
-            version is kept. Your original local copy stays safe until sync
-            completes.
+            If a budget or recurring schedule changes in two places, the
+            version with the later update time wins. Pending local edits remain
+            on this device until they sync.
           </p>
         </div>
       </div>
@@ -1837,9 +1911,13 @@ export function InsightsPage() {
     [allRecords],
   );
   const code = useAppSelector((s) => s.settings.currency);
-  const [current, setCurrent] = useState(records[0]);
+  const recurring = useAppSelector((s) => s.recurring.records.filter((item) => !item.isDeleted));
+  const [currentId, setCurrentId] = useState("");
+  const current = records.find((record) => record.id === currentId) ?? records[0];
   const alerts = current ? anomalyRules(current) : [];
   const allRules = current ? anomalyRules(current) : [];
+  const projected = current ? monthEndPrediction(current, recurring) : 0;
+  const scheduledDue = current ? recurringDueInMonth(recurring, current.year, current.month) : 0;
   return (
     <>
       <PageHeading
@@ -1850,11 +1928,7 @@ export function InsightsPage() {
           <CalendarDays size={15} />
           <select
             value={current?.id ?? ""}
-            onChange={(e) =>
-              setCurrent(
-                records.find((r) => r.id === e.target.value) ?? records[0],
-              )
-            }
+            onChange={(e) => setCurrentId(e.target.value)}
           >
             {records.map((r) => (
               <option key={r.id} value={r.id}>
@@ -1865,6 +1939,12 @@ export function InsightsPage() {
           <ChevronDown size={14} />
         </label>
       </PageHeading>
+      {!current ? <EmptyState title="No monthly data yet" body="Add a month to start seeing category-aware insights and scheduled payment forecasts." action={<Button kind="secondary" to="/budget">Add a month <ArrowRight size={14} /></Button>} /> : <div className="stats-grid insight-forecast">
+        <StatCard label="SPENDING SO FAR" value={money(totalExpense(current), code)} detail="Amounts recorded for this month" icon={<CreditCard size={18} />} tone="blue" />
+        <StatCard label="UNPAID SCHEDULED PAYMENTS" value={money(scheduledDue, code)} detail="Due occurrences not marked paid" icon={<CalendarDays size={18} />} tone="peach" />
+        <StatCard label="PROJECTED MONTH-END" value={money(projected, code)} detail={current.income > 0 ? `${money(projected - current.income, code)} vs monthly income` : "Add monthly income for context"} icon={<TrendingDown size={18} />} tone={projected > current.income && current.income > 0 ? "peach" : "mint"} />
+      </div>}
+      {current && <>
       <div className="insights-intro">
         <div>
           <span className="eyebrow">YOUR MONTHLY CHECK-IN</span>
@@ -1903,11 +1983,11 @@ export function InsightsPage() {
               </div>
               <span className={`insight-big ${a.severity}`}>
                 {a.id === "food"
-                  ? `${Math.round((current.food / current.income) * 100)}%`
+                  ? current.income ? `${Math.round((current.food / current.income) * 100)}%` : "—"
                   : a.id === "subs"
-                    ? `${Math.round((current.subscriptions / current.income) * 100)}%`
+                    ? current.income ? `${Math.round((current.subscriptions / current.income) * 100)}%` : "—"
                     : a.id === "bills"
-                      ? `${Math.round((current.bills / current.income) * 100)}%`
+                      ? current.income ? `${Math.round((current.bills / current.income) * 100)}%` : "—"
                       : money(totalExpense(current), code)}
               </span>
               <h3>{a.message}</h3>
@@ -1940,9 +2020,12 @@ export function InsightsPage() {
         </Card>
       )}
       <div className="insight-disclaimer">
-        <ShieldCheck size={15} /> These are simple spending thresholds based on
-        your income, not financial advice.
+        <ShieldCheck size={15} /> The projection treats bills and subscriptions
+        as fixed, adds unpaid scheduled occurrences, and extrapolates only food,
+        transport, and other variable spending. It uses the values you entered
+        as spending so far; this is a planning estimate, not financial advice.
       </div>
+      </>}
     </>
   );
 }
@@ -1954,12 +2037,13 @@ export function SettingsPage() {
   const [tab, setTab] = useState("Profile");
   const [name, setName] = useState(user?.name ?? "");
   const records = useAppSelector((s) => s.budget.records);
+  const recurring = useAppSelector((s) => s.recurring.records);
   const tabs = ["Profile", "Preferences", "Data", "Security"];
   const exportJson = () => {
     const blob = new Blob(
       [
         JSON.stringify(
-          { exportedAt: new Date().toISOString(), user, budgets: records },
+          { exportedAt: new Date().toISOString(), user, budgets: records, recurringExpenses: recurring },
           null,
           2,
         ),
@@ -2083,7 +2167,7 @@ export function SettingsPage() {
                 <div>
                   <b>Export a backup</b>
                   <small>
-                    Download your profile and budgets as a JSON file.
+                    Download your profile, budgets, and recurring payments as a JSON file.
                   </small>
                 </div>
                 <Button kind="secondary" onClick={exportJson}>
@@ -2110,6 +2194,7 @@ export function SettingsPage() {
                       void clearBudgets(user.id)
                         .then(() => {
                           dispatch(clearBudgetState());
+                          dispatch(clearRecurring());
                           toast.success("Local data cleared.");
                         })
                         .catch(() =>
